@@ -91,7 +91,6 @@ int main(int argc,char ** argv)
     // Resize: device by 4
     resize_uyuv(img_new, &small, DOWNSIZE_FACTOR);
 
-
     ppz2gst.roll += 71;
     if (ppz2gst.roll > 35*70)
       ppz2gst.roll = -35*70;
