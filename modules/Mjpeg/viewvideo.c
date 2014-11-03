@@ -55,9 +55,15 @@ void *computervision_thread_main(void* data)
 {
   // Video Input
   struct vid_struct vid;
+#ifndef CAM_BOTTOM
   vid.device = (char*)"/dev/video1";
   vid.w=1280;
   vid.h=720;
+#else
+  vid.device = (char*)"/dev/video2";
+  vid.w=320;
+  vid.h=240;
+#endif
   vid.n_buffers = 4;
   if (video_init(&vid)<0) {
     printf("Error initialising video\n");
@@ -69,7 +75,11 @@ void *computervision_thread_main(void* data)
   struct img_struct* img_new = video_create_image(&vid);
 
   // Video Resizing
+#ifndef CAM_BOTTOM
   #define DOWNSIZE_FACTOR   4
+#else
+  #define DOWNSIZE_FACTOR   1
+#endif
   uint8_t quality_factor = 50; // From 0 to 99 (99=high)
   uint8_t dri_jpeg_header = 0;
   int millisleep = 250;
