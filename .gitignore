@@ -18,3 +18,7 @@
 *.out
 *.app
 *.x
+
+# Kate temporary files
+*~
+modules/OpticFlowARM/.opticflowarm_module.c.kate-swp
