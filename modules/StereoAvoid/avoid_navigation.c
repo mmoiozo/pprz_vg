@@ -40,7 +40,7 @@
 
 #include "boards/ardrone/navdata.h"
 
-
+#include "led.h"
 
 struct AvoidNavigationStruct avoid_navigation_data;
 bool_t obstacle_detected = FALSE;
