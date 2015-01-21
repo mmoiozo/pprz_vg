@@ -39,14 +39,13 @@
 #include "subsystems/datalink/downlink.h"
 
 #include "boards/ardrone/navdata.h"
-
 #include "led.h"
+
+
 
 struct AvoidNavigationStruct avoid_navigation_data;
 bool_t obstacle_detected = FALSE;
-int32_t counter[6] = {0,0,0,0,0,0};
-int32_t free_frame_counter = 0;
-uint8_t obstacle_in_frame = 0;
+int32_t counter = 0;
 
 // Called once on paparazzi autopilot start
 void init_avoid_navigation()
@@ -59,38 +58,30 @@ void init_avoid_navigation()
 void run_avoid_navigation_onvision(void)
 {
   // Send ALL vision data to the ground
-  DOWNLINK_SEND_PAYLOAD(DefaultChannel, DefaultDevice, 7, avoid_navigation_data.stereo_bin);
+  DOWNLINK_SEND_PAYLOAD(DefaultChannel, DefaultDevice, 5, avoid_navigation_data.stereo_bin);
 
   switch (avoid_navigation_data.mode)
   {
   case 0:     // Go to Goal and stop at obstacles
-    for(uint8_t i=0; i<6; i++) {
-      //count 4 subsequent obstacles in any of the bins
-      if(avoid_navigation_data.stereo_bin[i]>7) {
-        counter[i] = counter[i] + 1;
-        if(counter[i] > 3) {
-          for(uint8_t j=0; j<6; j++) {
-            counter[j] = 0;
-          }
-          //Obstacle detected, go to turn until clear mode
-          obstacle_detected = TRUE;
-          avoid_navigation_data.mode = 1;
-        }
+    //count 4 subsequent obstacles
+    if(avoid_navigation_data.stereo_bin[0]>20) {
+      counter = counter + 1;
+      if(counter > 2) {
+        counter = 0;
+        //Obstacle detected, go to turn until clear mode
+        obstacle_detected = TRUE;
+        avoid_navigation_data.mode = 1;
       }
-      else
-        counter[i] = 0;
     }
+    else
+      counter = 0;
     break;
   case 1:     // Turn until clear
     //count 20 subsequent free frames
-    obstacle_in_frame = 0;
-    for(uint8_t i=0; i<6; i++) {
-      obstacle_in_frame += avoid_navigation_data.stereo_bin[i]>7;
-    }
-    if(obstacle_in_frame == 0) {
-      free_frame_counter = free_frame_counter + 1;
-      if(free_frame_counter > 10) {
-        free_frame_counter = 0;
+    if(avoid_navigation_data.stereo_bin[0]<15) {
+      counter = counter + 1;
+      if(counter > 12) {
+        counter = 0;
         //Stop and put waypoint 2.5 m ahead
         struct EnuCoor_i new_coor;
         struct EnuCoor_i* pos = stateGetPositionEnu_i();
@@ -99,21 +90,22 @@ void run_avoid_navigation_onvision(void)
         new_coor.x = pos->x + POS_BFP_OF_REAL(sin_heading*2.0);
         new_coor.y = pos->y + POS_BFP_OF_REAL(cos_heading*2.0);
         new_coor.z = pos->z;
-        nav_move_waypoint(WP_W1, &new_coor);
+//         nav_move_waypoint(WP_W1, &new_coor);
         obstacle_detected = FALSE;
         avoid_navigation_data.mode = 0;
       }
     }
     else
-      free_frame_counter = 0;
+      counter = 0;
+    break;
+  case 2:
     break;
   default:    // do nothing
     break;
   }
-//   avoid_navigation_data.stereo_bin[2] = avoid_navigation_data.stereo_bin[0]>20;
-//   avoid_navigation_data.stereo_bin[3] = avoid_navigation_data.mode;
-//   avoid_navigation_data.stereo_bin[4] = counter;
-   avoid_navigation_data.stereo_bin[6] = free_frame_counter;
+  avoid_navigation_data.stereo_bin[2] = avoid_navigation_data.stereo_bin[0]>20;
+  avoid_navigation_data.stereo_bin[3] = avoid_navigation_data.mode;
+  avoid_navigation_data.stereo_bin[4] = counter;
 
   if(obstacle_detected) {
     LED_ON(3);

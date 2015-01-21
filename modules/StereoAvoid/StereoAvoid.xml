@@ -21,7 +21,7 @@ VISION_MODULE_FOLDER = $(DIR_MODULES)/StereoAvoid
 
 $(TARGET).srcs += $(VISION_MODULE_FOLDER)/avoid_navigation.c
 $(TARGET).CFLAGS += -I$(DIR_MODULES) -I$(DIR_CV) -I$(DIR_LIB)
-$(TARGET).LDFLAGS += -lrt
+<!-- $(TARGET).LDFLAGS += -lrt -->
 
 ifeq ($(TARGET),ap)
 $(TARGET).srcs += $(VISION_MODULE_FOLDER)/stereo_avoid.c

@@ -60,14 +60,14 @@ static void stereo_parse(uint8_t c)
   {
     cnt = 1;
   }
-  else if (cnt < 6 && cnt > 0)
+  else if (cnt == 1)
   {
-    avoid_navigation_data.stereo_bin[cnt-1] = c;
-    cnt++;
+    avoid_navigation_data.stereo_bin[0] = c;
+    cnt = 2;
   }
-  else if (cnt == 6)
+  else if (cnt == 2)
   {
-    avoid_navigation_data.stereo_bin[5] = c;
+    avoid_navigation_data.stereo_bin[1] = c;
     run_avoid_navigation_onvision();
     cnt = 0;
   }
