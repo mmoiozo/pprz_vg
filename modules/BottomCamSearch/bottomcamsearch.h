@@ -44,4 +44,8 @@ extern uint8_t color_cr_max;
 
 extern int color_count;
 
+extern int32_t ecef_x_optitrack;
+extern int32_t ecef_y_optitrack;
+extern int32_t ecef_z_optitrack;
+
 #endif /* BOTTOM_CAM_SEARCH_H */
