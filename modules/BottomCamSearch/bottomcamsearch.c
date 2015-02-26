@@ -115,7 +115,6 @@ void bottomcamsearch_run(void) {
 // Video
 #include "v4l/video.h"
 #include "resize.h"
-#include "color.h"
 
 #include "encoding/jpeg.h"
 #include "encoding/rtp.h"
@@ -123,6 +122,8 @@ void bottomcamsearch_run(void) {
 #include <stdio.h>
 #include <string.h>
 
+//blob detection
+#include "color_blob.h"
 //attitude
 #include "state.h" 
 // Calculations
@@ -255,7 +256,7 @@ void *computervision_thread_main(void* data)
       px_angle_x = 0;
       px_angle_y = 0;
     }
-    h = (float)ins_impl.sonar_z*100;// h in cm
+    h = 100;//(float)ins_impl.sonar_z*100;// h in cm
     
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
@@ -265,7 +266,8 @@ void *computervision_thread_main(void* data)
     
     pos.x = x_pos/100; //pos.x in M
     pos.y = y_pos/100; //pos.y in M
-    pos.z = (float)ins_impl.sonar_z; //pos.z in M
+    pos.z = 100;//distance; //pos.z in M
+    //float sonar = (ins_impl.sonar_alt - ins_impl.sonar_offset) * INS_SONAR_SENS;
     
     ecef_of_enu_point_d(&ecef_pos ,&tracking_ltp ,&pos);
     lla_of_ecef_d(&lla_pos, &ecef_pos);
