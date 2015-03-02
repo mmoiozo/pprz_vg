@@ -129,6 +129,7 @@ void bottomcamsearch_run(void) {
 // Calculations
 #include <math.h>
 #include "subsystems/ins/ins_int.h" // used for ins.sonar_z
+#include "boards/ardrone/navdata.h" // for ultrasound Height
 //coordinates
 #include "math/pprz_geodetic_double.h"
 #include "math/pprz_algebra_double.h"
@@ -156,7 +157,7 @@ struct timeval end_time;
 
 
  static void send_blob_debug(void) {
- DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &x_pos_optitrack, &blob_debug_y, &psi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
+ DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &sonar_debug, &blob_debug_y, &psi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
  }
 
 
@@ -256,7 +257,7 @@ void *computervision_thread_main(void* data)
       px_angle_x = 0;
       px_angle_y = 0;
     }
-    h = 100;//(float)ins_impl.sonar_z*100;// h in cm
+    h = ((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
     
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
@@ -266,7 +267,7 @@ void *computervision_thread_main(void* data)
     
     pos.x = x_pos/100; //pos.x in M
     pos.y = y_pos/100; //pos.y in M
-    pos.z = 100;//distance; //pos.z in M
+    pos.z = h/100; //pos.z in M
     //float sonar = (ins_impl.sonar_alt - ins_impl.sonar_offset) * INS_SONAR_SENS;
     
     ecef_of_enu_point_d(&ecef_pos ,&tracking_ltp ,&pos);
