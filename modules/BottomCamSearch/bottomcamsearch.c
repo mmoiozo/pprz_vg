@@ -134,6 +134,8 @@ void bottomcamsearch_run(void) {
 #include "math/pprz_geodetic_double.h"
 #include "math/pprz_algebra_double.h"
 #include "subsystems/gps/gps_datalink.h"
+//sonar
+#include "/home/michael/paparazzi/sw/airborne/modules/sonar/agl_dist.h"
 //optitrack
 //#include "subsystems/datalink/downlink.h"
 //#include "dl_protocol.h"
@@ -257,7 +259,8 @@ void *computervision_thread_main(void* data)
       px_angle_x = 0;
       px_angle_y = 0;
     }
-    h = ((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
+    h =-(ins_impl.ltp_pos.z*0.39063);// in cm alt_unit="m"    alt_unit_coef="0.0039063"//((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
+    if(h<0)h=0;//dont use a negative altitude
     
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
@@ -267,7 +270,7 @@ void *computervision_thread_main(void* data)
     
     pos.x = x_pos/100; //pos.x in M
     pos.y = y_pos/100; //pos.y in M
-    pos.z = h/100; //pos.z in M
+    pos.z = h/100;// agl_dist_value_filtered; //pos.z in M
     //float sonar = (ins_impl.sonar_alt - ins_impl.sonar_offset) * INS_SONAR_SENS;
     
     ecef_of_enu_point_d(&ecef_pos ,&tracking_ltp ,&pos);
@@ -320,7 +323,7 @@ void *computervision_thread_main(void* data)
     psi_temp = ANGLE_BFP_OF_REAL(body_angle->psi);
     blob_debug_x = (int32_t)x_pos_b;// x_pos debug
     blob_debug_y = (int32_t)y_pos_b;// y_pos debug 
-    sonar_debug = (int32_t)h;
+    sonar_debug = (int32_t)h;//(agl_dist_value_filtered*100.0);//h;
     
     
     printf("ColorCount = %d \n", color_count);
