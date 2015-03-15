@@ -5,8 +5,9 @@
   <firmware name="rotorcraft">
     <target name="ap" board="ardrone2_raw">
       <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
+      <define name="USE_SONAR" value="1"/>
+      <define name="INS_SONAR_VARIANCE_THRESHOLD"/>
       <configure name="USE_MAGNETOMETER" value="0"/>
-
       <subsystem name="telemetry" type="transparent_udp"/>
       <subsystem name="radio_control" type="datalink"/>
     </target>
@@ -28,6 +29,7 @@
 
   <modules main_freq="512">
     <load name="send_imu_mag_current.xml"/>
+    <!--<load name="agl_dist.xml"/>-->
     <load name="follow.xml">
       <define name="FOLLOW_AC_ID" value="101"/>
       <define name="FOLLOW_WAYPOINT_ID" value="WP_p1"/>
@@ -114,6 +116,8 @@
 
   <section name="INS" prefix="INS_">
     <!-- Use GPS altitude measurments and set the R gain -->
+    <define name="SONAR_MAX_RANGE" value="4"/>
+    <define name="SONAR_UPDATE_ON_AGL" value="FALSE"/>
     <define name="USE_GPS_ALT" value="1"/>
     <define name="VFF_R_GPS" value="0.01"/>
   </section>
@@ -208,9 +212,9 @@
     <define name="REF_MAX_SPEED" value="3"/>
 
     <!-- gains -->
-    <define name="PGAIN" value="116"/>
-    <define name="DGAIN" value="60"/>
-    <define name="IGAIN" value="30"/>
+    <define name="PGAIN" value="36"/>
+    <define name="DGAIN" value="0"/>
+    <define name="IGAIN" value="17"/>
     <define name="VGAIN" value="0"/>
     <define name="AGAIN" value="62"/>
   </section>
