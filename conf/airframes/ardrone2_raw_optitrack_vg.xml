@@ -35,7 +35,7 @@
       <define name="FOLLOW_WAYPOINT_ID" value="WP_p1"/>
       <define name="FOLLOW_OFFSET_Z" value="2.0"/>
     </load>
-     <load name="../../sw/ext/ardrone2_vision/modules/BottomCamSearch/BottomCamBallSearch.xml"/>
+     <load name="../../sw/ext/ardrone2_vision/modules/VisualPosition/visualposition.xml"/>
   </modules>
   
   <commands>
@@ -118,7 +118,7 @@
     <!-- Use GPS altitude measurments and set the R gain -->
     <define name="SONAR_MAX_RANGE" value="4"/>
     <define name="SONAR_UPDATE_ON_AGL" value="FALSE"/>
-    <define name="USE_GPS_ALT" value="1"/>
+    <define name="USE_GPS_ALT" value="0"/>
     <define name="VFF_R_GPS" value="0.01"/>
   </section>
 

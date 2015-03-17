@@ -59,7 +59,7 @@
 #define IdOfMsg(x) (x[1])
 
 //for optitrack send to modules
-#include "/home/michael/paparazzi/sw/ext/ardrone2_vision/modules/BottomCamSearch/bottomcamsearch.h"
+#include "/home/michael/paparazzi/sw/ext/ardrone2_vision/modules/VisualPosition/visualposition.h"
 
 void dl_parse_msg(void) {
 
