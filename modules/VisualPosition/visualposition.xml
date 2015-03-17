@@ -1,0 +1,32 @@
+<!DOCTYPE module SYSTEM "../module.dtd">
+
+<module name="VisualPosition">
+  <doc>
+    <description>Video ARDone 2 Bottom Camera marker based positioning</description>
+  </doc>
+
+  <header>
+    <file name="visualposition.h"/>
+  </header>
+
+  <periodic fun="visualposition_run()" freq="20" start="visualposition_start()" stop="visualposition_stop()" autorun="TRUE"/>
+  <makefile>
+      <raw>
+
+include $(PAPARAZZI_HOME)/sw/ext/ardrone2_vision/Makefile.paths
+          
+VISION_MODULE_FOLDER = $(DIR_MODULES)/VisualPosition
+
+$(TARGET).srcs += $(VISION_MODULE_FOLDER)/visualposition.c
+$(TARGET).srcs += $(DIR_CV)/encoding/jpeg.c
+$(TARGET).srcs += $(DIR_CV)/encoding/rtp.c
+$(TARGET).srcs += $(DIR_LIB)/udp/socket.c
+$(TARGET).srcs += $(DIR_LIB)/v4l/video.c
+$(TARGET).srcs += $(DIR_LIB)/v4l/ardrone2.c
+$(TARGET).CFLAGS += -I$(DIR_MODULES) -I$(DIR_CV) -I$(DIR_LIB) -pthread -D__USE_GNU
+$(TARGET).LDFLAGS += -pthread -lrt -static
+
+    </raw>
+  </makefile>
+</module>
+
