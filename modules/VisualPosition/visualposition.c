@@ -24,7 +24,8 @@
 #include "visualposition.h"
 
 // UDP RTP Images
-#include "udp/socket.h"
+//#include "udp/socket.h"
+#include "arch/linux/udp_socket.h"
 
 // Threaded computer vision
 #include <pthread.h>
@@ -259,7 +260,7 @@ void *computervision_thread_main(void* data)
       px_angle_x = 0;
       px_angle_y = 0;
     }
-    h =((navdata.ultrasound & 0x7FFF) - 885)/25;//-(ins_impl.ltp_pos.z*0.39063);// in cm alt_unit="m"    alt_unit_coef="0.0039063"//((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
+    h = 0;//((navdata.ultrasound & 0x7FFF) - 885)/25;//-(ins_impl.ltp_pos.z*0.39063);// in cm alt_unit="m"    alt_unit_coef="0.0039063"//((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
     if(h<0)h=0;//dont use a negative altitude
     
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
@@ -351,6 +352,36 @@ void *computervision_thread_main(void* data)
   video_close(&vid);
   computervision_thread_status = -100;
   return 0;
+}
+
+float get_angle(float x_a, float y_a, float x_b, float y_b)
+{
+  float angle = 0;
+  float x_tresh = 10;//treshhold value for when displacement is assumed small
+  float y_tresh = 10;
+  float x_tresh_inf = 0.1;
+  float delta_x = x_b - x_a;
+  float delta_y = y_b - y_a;
+  float dy_dx = delta_y/delta_x;
+  
+  if(abs(delta_x) < x_tresh && abs(delta_y) <= y_tresh)
+  {
+    break // no valid calculation possible
+  }
+  else if(abs(delta_x) < x_tresh_inf && delta_y > y_tresh)
+  {
+    angle = 90;//maybe radians
+  }
+  else if(abs(delta_x) < x_tresh_inf && delta_y < -y_tresh)
+  {
+    angle = 270;//maybe radians
+  }
+  else if(delta_x > 0 && dy_dx >= 0)
+  {
+    angle = atanf(dy_dx);
+  }
+  
+  return angle;
 }
 
 void visualposition_start(void)
