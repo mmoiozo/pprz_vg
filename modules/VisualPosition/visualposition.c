@@ -357,8 +357,8 @@ void *computervision_thread_main(void* data)
 float get_angle(float x_a, float y_a, float x_b, float y_b)
 {
   float angle = 0;
-  float x_tresh = 10;//treshhold value for when displacement is assumed small
-  float y_tresh = 10;
+  float x_tresh = 100;//treshhold value for when displacement is assumed small
+  float y_tresh = 100;
   float x_tresh_inf = 0.1;
   float delta_x = x_b - x_a;
   float delta_y = y_b - y_a;
