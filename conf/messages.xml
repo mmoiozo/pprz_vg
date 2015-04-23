@@ -1907,7 +1907,12 @@
   </message>
 
   <!--216 is free -->
-  <!--217 is free -->
+  <message name="BLOB_DEBUG" id="217">
+    <field name="blob_center_x"  type="int32"/>
+    <field name="blob_center_y"  type="int32"/>
+    <field name="integral_max_x" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="integral_max_y" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+  </message>
 
   <message name="BEBOP_ACTUATORS" id="218">
     <field name="cmd_thrust" type="int32"/>
