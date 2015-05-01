@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2012-2013
+ * Copyright (C) 2012-2014 The Paparazzi Community
+ *               2015 Freek van Tienen <freek.v.tienen@gmail.com>
  *
  * This file is part of Paparazzi.
  *
@@ -14,48 +15,44 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Paparazzi; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with paparazzi; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
  */
 
 /**
- * @file visualposition.h
+ * @file modules/computer_vision/viewvideo.h
+ *
+ * Get live images from a RTP/UDP stream
+ * and save pictures on internal memory
+ *
+ * Works on Linux platforms
  */
 
-#ifndef VISUAL_POSITION_H
-#define VISUAL_POSITION_H
+#ifndef VIEW_VIDEO_H
+#define VIEW_VIDEO_H
 
-#include <stdint.h>
-
-// Module functions
-extern void visualposition_run(void);
-extern void visualposition_start(void);
-extern void visualposition_stop(void);
-
-extern uint8_t color_lum_min;
-extern uint8_t color_lum_max;
-
-extern uint8_t color_cb_min;
-extern uint8_t color_cb_max;
-
-extern uint8_t color_cr_min;
-extern uint8_t color_cr_max;
-
-extern int color_count;
-
-extern int32_t ecef_x_optitrack;
-extern int32_t ecef_y_optitrack;
-extern int32_t ecef_z_optitrack;
+#include "std.h"
 
 // Main viewvideo structure
-struct video_t {
+struct viewvideo_t {
+  volatile bool_t is_streaming;   ///< When the device is streaming
   struct v4l2_device *dev;        ///< The V4L2 device that is used for the video stream
   uint8_t downsize_factor;        ///< Downsize factor during the stream
   uint8_t quality_factor;         ///< Quality factor during the stream
-  uint16_t w;             ///< Image width
-  uint16_t h;             ///< Image height
-};
-extern struct video_t video;
+  uint8_t fps;                    ///< The amount of frames per second
 
-#endif /*  VISUAL POSITION H */
+  volatile bool_t take_shot;      ///< Wether to take an image
+  uint16_t shot_number;           ///< The last shot number
+};
+extern struct viewvideo_t viewvideo;
+
+// Module functions
+extern void visualposition_init(void);
+extern void visualposition_periodic(void); ///< A dummy for now
+extern void visualposition_start(void);
+extern void visualposition_stop(void);
+extern void viewvideo_take_shot(bool_t take);
+
+#endif /* VIEW_VIDEO_H */
+

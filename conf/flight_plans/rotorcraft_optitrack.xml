@@ -1,6 +1,6 @@
 <!DOCTYPE flight_plan SYSTEM "flight_plan.dtd">
 
-<flight_plan alt="150" ground_alt="147" lat0="51.990634" lon0="4.376789" max_dist_from_home="150" name="Rotorcraft Basic (Enac)" security_height="2">
+<flight_plan alt="2" ground_alt="0" lat0="51.990639" lon0="4.376807" max_dist_from_home="10" name="Rotorcraft visual position" security_height="2">
   <header>
 #include "autopilot.h"
   </header>
@@ -20,10 +20,10 @@
   </waypoints>
   <sectors>
     <sector color="red" name="Flight_Area">
-      <corner name="FA4"/>
-      <corner name="FA3"/>
-      <corner name="FA2"/>
       <corner name="FA1"/>
+      <corner name="FA2"/>
+      <corner name="FA3"/>
+      <corner name="FA4"/>
     </sector>
   </sectors>
   <blocks>

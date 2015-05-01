@@ -23,13 +23,13 @@
 #include <stdint.h>
 #include "lib/vision/image.h"
 
-//inline int colorblob_uyvy(struct img_t *input, struct img_t *output, uint8_t y_m, uint8_t y_M, uint8_t u_m, uint8_t u_M, uint8_t v_m, uint8_t v_M, uint16_t *pix_x, uint16_t *pix_y, uint16_t *cp_u, uint16_t *cp_v);
+inline int colorblob_uyvy(struct image_t *input, struct image_t *output, uint8_t y_m, uint8_t y_M, uint8_t u_m, uint8_t u_M, uint8_t v_m, uint8_t v_M, uint16_t *pix_x, uint16_t *pix_y, uint16_t *cp_u, uint16_t *cp_v);
 inline int colorblob_uyvy(struct image_t *input, struct image_t *output, uint8_t y_m, uint8_t y_M, uint8_t u_m, uint8_t u_M, uint8_t v_m, uint8_t v_M, uint16_t *pix_x, uint16_t *pix_y, uint16_t *cp_u, uint16_t *cp_v)
 {
   int cnt = 0;
   uint8_t *source = input->buf;
   uint8_t *dest = output->buf;
-  
+    
   char match = 0;
   uint16_t hold = 0;
   uint16_t old = 0;
@@ -142,9 +142,9 @@ inline int colorblob_uyvy(struct image_t *input, struct image_t *output, uint8_t
   
   return cnt;
 }
-/*
-inline int multi_blob_uyvy(struct img_struct* input, struct img_struct* output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v);
-inline int multi_blob_uyvy(struct img_struct* input, struct img_struct* output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v)
+
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v);
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v)
 {
   int cnt[5] = {0,0,0,0,0};
   int any_match = 0;
@@ -220,7 +220,7 @@ inline int multi_blob_uyvy(struct img_struct* input, struct img_struct* output, 
       any_match = 0;
       
       //blob center cross
-      if(x == *pix_x || y == *pix_y)
+      if(x == *pix_x[0] || y == *pix_y[0])
       {
 	dest[0] = 64;        // U
         dest[2] = 255;        // V
@@ -275,4 +275,3 @@ inline int multi_blob_uyvy(struct img_struct* input, struct img_struct* output, 
       }
   return cnt[0];
 }
-*/

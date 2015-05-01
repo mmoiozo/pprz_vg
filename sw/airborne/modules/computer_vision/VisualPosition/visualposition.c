@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2012-2013
+ * Copyright (C) 2012-2014 The Paparazzi Community
+ *               2015 Freek van Tienen <freek.v.tienen@gmail.com>
  *
  * This file is part of Paparazzi.
  *
@@ -14,17 +15,36 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Paparazzi; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with paparazzi; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
  */
 
+/**
+ * @file modules/computer_vision/viewvideo.c
+ *
+ * Get live images from a RTP/UDP stream
+ * and save pictures on internal memory
+ *
+ * Works on Linux platforms
+ */
 
 // Own header
-#include "visualposition.h"
+#include "modules/computer_vision/viewvideo.h"
+#include "modules/computer_vision/color_blob.h"
 
-// UDP RTP Images
-//#include "udp/socket.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <math.h>
+
+// Video
+#include "lib/v4l/v4l2.h"
+#include "lib/vision/image.h"
+#include "lib/encoding/jpeg.h"
+#include "lib/encoding/rtp.h"
 #include "udp_socket.h"
 
 // Threaded computer vision
@@ -35,41 +55,142 @@
 #include "subsystems/datalink/downlink.h"
 #include "subsystems/datalink/pprz_transport.h"
 #include "subsystems/datalink/telemetry.h"
+//ABI
+#include "subsystems/abi.h"
 
-// Timing
-#include <sys/time.h>
+//state 
+#include "state.h"
+
+// Calculations
+#include <math.h>
+#include "subsystems/ins/ins_int.h" // used for ins.sonar_z
+#include "boards/ardrone/navdata.h" // for ultrasound Height
+//coordinates
+#include "math/pprz_geodetic_double.h"
+#include "math/pprz_algebra_double.h"
+#include "subsystems/gps/gps_datalink.h"
+
+//camera angles
+#define Fx		171.5606 //due to chroma downsampling in x-direction 343.1211 // Camera focal length (px/rad)
+#define Fy		348.5053 // Camera focal length (px/rad)
+//TIMGING
+#define USEC_PER_MS 1000
+#define USEC_PER_SEC 1000000
+
+// The video device
+#ifndef VIEWVIDEO_DEVICE
+#define VIEWVIDEO_DEVICE /dev/video2
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_DEVICE)
+
+// The video device size (width, height)
+#ifndef VIEWVIDEO_DEVICE_SIZE
+#define VIEWVIDEO_DEVICE_SIZE 320,240
+#endif
+#define __SIZE_HELPER(x, y) #x", "#y
+#define _SIZE_HELPER(x) __SIZE_HELPER(x)
+PRINT_CONFIG_MSG("VIEWVIDEO_DEVICE_SIZE = " _SIZE_HELPER(VIEWVIDEO_DEVICE_SIZE))
+
+// The video device buffers (the amount of V4L2 buffers)
+#ifndef VIEWVIDEO_DEVICE_BUFFERS
+#define VIEWVIDEO_DEVICE_BUFFERS 10
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_DEVICE_BUFFERS)
+
+// Downsize factor for video stream
+#ifndef VIEWVIDEO_DOWNSIZE_FACTOR
+#define VIEWVIDEO_DOWNSIZE_FACTOR 1
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_DOWNSIZE_FACTOR)
+
+// From 0 to 99 (99=high)
+#ifndef VIEWVIDEO_QUALITY_FACTOR
+#define VIEWVIDEO_QUALITY_FACTOR 20
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_QUALITY_FACTOR)
+
+// RTP time increment at 90kHz (default: 0 for automatic)
+#ifndef VIEWVIDEO_RTP_TIME_INC
+#define VIEWVIDEO_RTP_TIME_INC 0
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_RTP_TIME_INC)
+
+// Frames Per Seconds
+#ifndef VIEWVIDEO_FPS
+#define VIEWVIDEO_FPS 10
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_FPS)
+
+// The place where the shots are saved (without slash on the end)
+#ifndef VIEWVIDEO_SHOT_PATH
+#define VIEWVIDEO_SHOT_PATH "/data/video/images"
+#endif
+PRINT_CONFIG_VAR(VIEWVIDEO_SHOT_PATH)
+
+// Check if we are using netcat instead of RTP/UDP
+#ifndef VIEWVIDEO_USE_NETCAT
+#define VIEWVIDEO_USE_NETCAT FALSE
+#endif
+#if VIEWVIDEO_USE_NETCAT
+PRINT_CONFIG_MSG("[viewvideo] Using netcat.")
+#else
+PRINT_CONFIG_MSG("[viewvideo] Using RTP/UDP stream.")
+#endif
+
+/* These are defined with configure */
+PRINT_CONFIG_VAR(VIEWVIDEO_HOST)
+PRINT_CONFIG_VAR(VIEWVIDEO_PORT_OUT)
+
+static pthread_mutex_t visualposition_mutex;            ///< Mutex lock fo thread safety
+
+// Main thread
+static void *visualposition_thread(void *data);
+void visualposition_periodic(void) { }
+
+// Initialize the viewvideo structure with the defaults
+struct viewvideo_t viewvideo = {
+  .is_streaming = FALSE,
+  .downsize_factor = VIEWVIDEO_DOWNSIZE_FACTOR,
+  .quality_factor = VIEWVIDEO_QUALITY_FACTOR,
+  .fps = VIEWVIDEO_FPS,
+  .take_shot = FALSE,
+  .shot_number = 0
+};
 
 
-/*
-uint8_t color_lum_min = 105;
-uint8_t color_lum_max = 205;
-uint8_t color_cb_min  = 52;
-uint8_t color_cb_max  = 140;
-uint8_t color_cr_min  = 180;
-uint8_t color_cr_max  = 255;
-*/
 
+//DEBUG MESSAGES
+
+  int32_t phi_temp = 0;
+  int32_t theta_temp = 0;
+  int32_t psi_temp = 0;
+  int32_t blob_debug_x = 0;
+  int32_t blob_debug_y = 0;
+  int32_t sonar_debug = 10;
+  
+  uint32_t color_debug_u = 0;
+  uint32_t color_debug_v = 0;
+  uint32_t blob_x_debug = 0;
+  uint32_t blob_y_debug = 0;
+  
+// Vision module
 uint8_t color_lum_min = 60;
 uint8_t color_lum_max = 160;
-uint8_t color_cb_min  = 95;
-uint8_t color_cb_max  = 125;
-uint8_t color_cr_min  = 170;
-uint8_t color_cr_max  = 240;
+uint8_t color_cb_min  = 170;//95; //oranje
+uint8_t color_cb_max  = 195;//125;
+uint8_t color_cr_min  = 65;//170;
+uint8_t color_cr_max  = 95;//240;
 
 int color_count = 0;
 
 uint16_t blob_center_x = 0;
 uint16_t blob_center_y = 0;
 
+uint16_t blob_x[5] = {};
+uint16_t blob_y[5] = {};
+
 uint16_t cp_value_u = 0;
 uint16_t cp_value_v = 0;
-
-uint16_t integral_max_x = 3;
-uint16_t integral_max_y = 4;
-
-int32_t blob_debug_x = 0;
-int32_t blob_debug_y = 0;
-int32_t sonar_debug = 0;
 
 float px_angle_x = 0.0;
 float px_angle_y = 0.0;
@@ -89,16 +210,7 @@ int32_t z_pos_optitrack = 0;
 
 float x_pos = 0.0;
 float y_pos = 0.0;
-
-//compensation angles
-int32_t phi_temp = 0;
-int32_t theta_temp = 0;
-int32_t psi_temp = 0;
 struct FloatEulers* body_angle;
-  
-//timing
-long diffTime;
-int32_t dt = 0;
 
 //Speed calculations
 int samples = 0;
@@ -107,42 +219,18 @@ float x_speed = 0;
 float y_speed = 0;
 float z_speed = 0;
 
-void visualposition_run(void) {
-}
+//timing
+long diffTime;
+int32_t dt = 0;
+struct timeval start_time;
+struct timeval end_time;
 
-/////////////////////////////////////////////////////////////////////////
-// COMPUTER VISION THREAD
 
-// Video
-//#include "v4l/video.h"
-#include "/home/michael/paparazzi/sw/airborne/modules/computer_vision/lib/v4l/v4l2.h"
-//#include "resize.h"
-
-#include "/home/michael/paparazzi/sw/airborne/modules/computer_vision/lib/encoding/jpeg.h"
-#include "/home/michael/paparazzi/sw/airborne/modules/computer_vision/lib/encoding/rtp.h"
-
-#include "/home/michael/paparazzi/sw/airborne/modules/computer_vision/lib/vision/image.h"
-
-#include <stdio.h>
-#include <string.h>
-
-//blob detection
-#include "color_blob.h"
-//attitude
-#include "state.h" 
-// Calculations
-#include <math.h>
-#include "subsystems/ins/ins_int.h" // used for ins.sonar_z
-#include "boards/ardrone/navdata.h" // for ultrasound Height
-//coordinates
-#include "math/pprz_geodetic_double.h"
-#include "math/pprz_algebra_double.h"
-#include "subsystems/gps/gps_datalink.h"
-//sonar
-#include "/home/michael/paparazzi/sw/airborne/modules/sonar/agl_dist.h"
-//optitrack
-//#include "subsystems/datalink/downlink.h"
-//#include "dl_protocol.h"
+uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
+			     60,160,170,195,65,95,//blue
+			     60,160,0,0,0,0,//empty
+			     60,160,0,0,0,0,//empty
+			     60,160,0,0,0,0};//empt
 
 // Defines to make easy use of paparazzi math
 struct EnuCoor_d pos, speed,enu;
@@ -151,43 +239,26 @@ struct LlaCoor_d lla_pos;
 struct LtpDef_d tracking_ltp;       ///< The tracking system LTP definition
 struct EcefCoor_d ecef_vel;       ///< Last valid ECEF velocity in meters
 
-// Timers
-struct timeval start_time;
-struct timeval end_time;
+//ABI
+abi_event ev;
 
-#define USEC_PER_MS 1000
-#define USEC_PER_SEC 1000000
+static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
+{
+  // Update the distance if we got a valid measurement
+  if (distance > 0) {
+    h = distance*100;//in cm
+  }
+}
 
-#define Fx		171.5606 //due to chroma downsampling in x-direction 343.1211 // Camera focal length (px/rad)
-#define Fy		348.5053 // Camera focal length (px/rad)
-
-#define PI 3.141592653589793238462643383
-// video
-#define VIEWVIDEO_QUALITY_FACTOR 20
-#ifndef VIEWVIDEO_USE_NETCAT
-#define VIEWVIDEO_USE_NETCAT FALSE
-#endif
-#define FMS_BROADCAST 1
-/* The video device */
-#ifndef VIDEO_DEVICE
-#define VIDEO_DEVICE /dev/video2      ///< The video device
-#endif
-/* The video device size (width, height) */
-#ifndef VIDEO_DEVICE_SIZE
-#define VIDEO_DEVICE_SIZE 320,240     ///< The video device size (width, height)
-#endif
-// The video device buffers (the amount of V4L2 buffers)
-#ifndef VIDEO_DEVICE_BUFFERS
-#define VIDEO_DEVICE_BUFFERS 10
-#endif
-static struct v4l2_device *opticflow_dev;          ///< The opticflow camera V4L2 device
-//
-
- static void send_blob_debug(void) {
- DOWNLINK_SEND_BLOB_DEBUG(DefaultChannel, DefaultDevice, &sonar_debug, &blob_debug_y, &psi_temp, &theta_temp);//&cp_value_u, &cp_value_v);
+static void send_blob_debug(struct transport_tx *trans, struct link_device *dev) //static void send_blob_debug(void) 
+ {
+    pthread_mutex_lock(&visualposition_mutex);
+ pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &sonar_debug, &blob_y_debug, &phi_temp, &theta_temp);
+  pthread_mutex_unlock(&visualposition_mutex);
  }
+//pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &sonar_debug, &blob_debug_y, &psi_temp, &theta_temp);
 
-
+//TIMING
 volatile long time_elapsed (struct timeval *t1, struct timeval *t2);
 volatile long time_elapsed (struct timeval *t1, struct timeval *t2)
 {
@@ -210,93 +281,74 @@ long end_timer(void) {
 	return time_elapsed(&start_time, &end_time);
 }
 
-pthread_t computervision_thread;
-volatile uint8_t computervision_thread_status = 0;
-volatile uint8_t computer_vision_thread_command = 0;
 
-struct video_t video = {
-  .w = 320,
-  .h = 240,
-  .downsize_factor = 1
-};
-void *computervision_thread_main(void* data);
-void *computervision_thread_main(void* data)
+/**
+ * Handles all the video streaming and saving of the image shots
+ * This is a sepereate thread, so it needs to be thread safe!
+ */
+static void *visualposition_thread(void *data __attribute__((unused)))
 {
-  // Video Input
-  /*
-  struct vid_struct vid;
-  vid.device = (char*)"/dev/video2";
-  vid.w=320;
-  vid.h=240;
-  vid.n_buffers = 4;
-  if (video_init(&vid)<0) {
-    printf("Error initialising video\n");
-    computervision_thread_status = -1;
+   printf("started\n");
+  // Start the streaming of the V4L2 device
+  if (!v4l2_start_capture(viewvideo.dev)) {
+    printf("[viewvideo-thread] Could not start capture of %s.\n", viewvideo.dev->name);
     return 0;
   }
-*/
-  // Video Grabbing
-  //struct img_struct* img_new = video_create_image(&vid);
 
-  // Video Resizing
-  #define DOWNSIZE_FACTOR   2
-  
-  uint8_t quality_factor = 20; // From 0 to 99 (99=high) 50
-  uint8_t dri_jpeg_header = 0;
-  int millisleep = 1;//25;//250
-/*
-  struct img_struct small;
-  small.w = vid.w; /// DOWNSIZE_FACTOR;
-  small.h = vid.h;/// DOWNSIZE_FACTOR;
-  small.buf = (uint8_t*)malloc(small.w*small.h*2);
-*/
-
-  // Video Compression
- // uint8_t* jpegbuf = (uint8_t*)malloc(vid.h*vid.w*2);
-
-  // Network Transmit
- // struct UdpSocket* vsock;
-  //vsock = udp_socket("192.168.1.255", 5000, 5001, FMS_BROADCAST);
-  
-  struct UdpSocket video_sock;
-  udp_socket_create(&video_sock,"192.168.1.255", 5000, 5001, FMS_BROADCAST);
-  
   // Resize image if needed
   struct image_t img_small;
   image_create(&img_small,
-               video.w / video.downsize_factor,
-               video.h / video.downsize_factor,
+               viewvideo.dev->w / viewvideo.downsize_factor,
+               viewvideo.dev->h / viewvideo.downsize_factor,
                IMAGE_YUV422);
-  
-  struct image_t img_jpeg;
-  image_create(&img_jpeg, img_small.w,  img_small.h, IMAGE_JPEG);
 
-  while (computer_vision_thread_command > 0)
-  {
-    usleep(1000* millisleep);
+  // Create the JPEG encoded image
+  struct image_t img_jpeg;
+  image_create(&img_jpeg, img_small.w, img_small.h, IMAGE_JPEG);
+
+  // Initialize timing
+  uint32_t microsleep = (uint32_t)(1000000. / (float)viewvideo.fps);
+  int millisleep = 1;
+  struct timeval last_time;
+  gettimeofday(&last_time, NULL);
+
+  struct UdpSocket video_sock;
+  udp_socket_create(&video_sock, STRINGIFY(VIEWVIDEO_HOST), VIEWVIDEO_PORT_OUT, -1, VIEWVIDEO_BROADCAST);
+
+
+  // Start streaming
+  viewvideo.is_streaming = TRUE;
+  while (viewvideo.is_streaming) {
     
-    diffTime = end_timer();  //
+    usleep(1000* millisleep);
+     diffTime = end_timer();  //
     start_timer();
     dt = (int32_t)(diffTime)/USEC_PER_MS;// check the loop rate
     
-    //video_grab_image(&vid, &small);
-    
+    // Wait for a new frame (blocking)
     struct image_t img;
-    v4l2_image_get(video.dev, &img);
-
-    color_count = colorblob_uyvy(&img,&img,
-        color_lum_min,color_lum_max,
-        color_cb_min,color_cb_max,
-        color_cr_min,color_cr_max,
+    v4l2_image_get(viewvideo.dev, &img);
+    
+     color_count = colorblob_uyvy(&img,&img,
+        filter_values[0],filter_values[1],
+        filter_values[2],filter_values[3],
+        filter_values[4],filter_values[5],
 	&blob_center_x,
 	&blob_center_y,
 	&cp_value_u,
         &cp_value_v
         );
+     /*
+     color_count = multi_blob_uyvy(&img,&img,
+        filter_values,
+	&blob_x,
+	&blob_y,
+	&cp_value_u,
+        &cp_value_v
+        );*/
 
-    
-    body_angle 	= stateGetNedToBodyEulers_f();//fetch the body angles
-    
+      body_angle 	= stateGetNedToBodyEulers_f();//fetch the body angles
+      
     if(color_count > 30)
     {
     px_angle_x = (((float)blob_center_x - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
@@ -307,8 +359,6 @@ void *computervision_thread_main(void* data)
       px_angle_x = 0;
       px_angle_y = 0;
     }
-    h = 0;// first testing((navdata.measure.ultrasound & 0x7FFF) - 885)/25;//-(ins_impl.ltp_pos.z*0.39063);// in cm alt_unit="m"    alt_unit_coef="0.0039063"//((navdata.ultrasound & 0x7FFF) - 885)/25;//(float)ins_impl.sonar_z*100;// h in cm
-    if(h<0)h=0;//dont use a negative altitude
     
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
@@ -338,19 +388,8 @@ void *computervision_thread_main(void* data)
     samples = 0;
     av_time = 0;
     }
-    
-    /*
-    //optitrack coordinates in ecef
-    new_pos.x = ecef_x_optitrack;
-    new_pos.y = ecef_y_optitrack;
-    new_pos.z = ecef_z_optitrack;
-    
-    enu_of_ecef_point_d(&enu, &tracking_ltp, &new_pos);
-    x_pos_optitrack = (int32_t)enu.x; 
-    y_pos_optitrack = (int32_t)enu.y; 
-    z_pos_optitrack = (int32_t)enu.z; 
-    */
-    parse_gps_datalink(
+
+      parse_gps_datalink(
       1,                //uint8 Number of markers (sv_num)
       (int)(ecef_pos.x*100.0),                //int32 ECEF X in CM
       (int)(ecef_pos.y*100.0),                //int32 ECEF Y in CM
@@ -364,143 +403,161 @@ void *computervision_thread_main(void* data)
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
       (int)(body_angle->psi*10000000.0));             //int32 Course in rad*1e7
-    
-    //prepare for debug send
-    phi_temp 	= ANGLE_BFP_OF_REAL(body_angle->phi);
-    theta_temp 	= ANGLE_BFP_OF_REAL(body_angle->theta);//body_angle->theta);
-    psi_temp = ANGLE_BFP_OF_REAL(body_angle->psi);
-    blob_debug_x = (int32_t)x_pos_b;// x_pos debug
-    blob_debug_y = (int32_t)y_pos_b;// y_pos debug 
-    sonar_debug = (int32_t)h;//(agl_dist_value_filtered*100.0);//h;
-    
-    
-    printf("ColorCount = %d \n", color_count);
-
-     // Only resize when needed
-    if (video.downsize_factor != 1) {
-      image_yuv422_downsample(&img, &img_small, video.downsize_factor);
+ 
+     //Debug values
+      sonar_debug = (int32_t)h;
+     color_debug_u = (int32_t)cp_value_u;
+     color_debug_v = (int32_t)cp_value_v;
+     blob_x_debug = (int32_t)x_pos;
+     blob_y_debug = (int32_t)y_pos;
+     phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
+     theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);
+     
+    // Only resize when needed
+    if (viewvideo.downsize_factor != 1) {
+      image_yuv422_downsample(&img, &img_small, viewvideo.downsize_factor);
       jpeg_encode_image(&img_small, &img_jpeg, VIEWVIDEO_QUALITY_FACTOR, VIEWVIDEO_USE_NETCAT);
-    } 
-    else {
+    } else {
       jpeg_encode_image(&img, &img_jpeg, VIEWVIDEO_QUALITY_FACTOR, VIEWVIDEO_USE_NETCAT);
     }
-    /*
-    // JPEG encode the image:
-    uint32_t image_format = FOUR_TWO_TWO;  // format (in jpeg.h)
-    uint8_t* end = encode_image (small.buf, jpegbuf, quality_factor, image_format, small.w, small.h, dri_jpeg_header);
-    uint32_t size = end-(jpegbuf);
 
-    printf("Sending an image ...%u\n",size);
-/*
- *
- *//*
-    send_rtp_frame(
-        vsock,            // UDP
-        jpegbuf,size,     // JPEG
-        small.w, small.h, // Img Size
-        0,                // Format 422
-        quality_factor,               // Jpeg-Quality
-        dri_jpeg_header,                // DRI Header
-        0              // 90kHz time increment
-     );
-  }*/
-  // Send image with RTP
+
+    // Send image with RTP
     rtp_frame_send(
       &video_sock,              // UDP socket
       &img_jpeg,
       0,                        // Format 422
-      quality_factor, // Jpeg-Quality
+      VIEWVIDEO_QUALITY_FACTOR, // Jpeg-Quality
       0,                        // DRI Header
-      0    // 90kHz time increment
+      VIEWVIDEO_RTP_TIME_INC    // 90kHz time increment
     );
-  printf("Thread Closed\n");
-   // Free the image
-    v4l2_image_free(video.dev, &img);
-  //video_close(&vid);
-    // Free all buffers
+    // Extra note: when the time increment is set to 0,
+    // it is automaticaly calculated by the send_rtp_frame function
+    // based on gettimeofday value. This seems to introduce some lag or jitter.
+    // An other way is to compute the time increment and set the correct value.
+    // It seems that a lower value is also working (when the frame is received
+    // the timestamp is always "late" so the frame is displayed immediately).
+    // Here, we set the time increment to the lowest possible value
+    // (1 = 1/90000 s) which is probably stupid but is actually working.
+
+    // Free the image
+    v4l2_image_free(viewvideo.dev, &img);
+  }
+
+  // Free all buffers
   image_free(&img_jpeg);
   image_free(&img_small);
-  computervision_thread_status = -100;
   return 0;
 }
-}
-float get_angle(float x_a, float y_a, float x_b, float y_b)
-{
-  float angle = 0;
-  float x_tresh = 100;//treshhold value for when displacement is assumed small
-  float y_tresh = 100;
-  float x_tresh_inf = 0.1;
-  float delta_x = x_b - x_a;
-  float delta_y = y_b - y_a;
-  float dy_dx = delta_y/delta_x;
-  
-  if(fabs(delta_x) < x_tresh && fabs(delta_y) <= y_tresh)
-  {
-     // no valid calculation possible
-  }
-  else if(fabs(delta_x) < x_tresh_inf && delta_y > y_tresh)
-  {
-    angle = PI/2;//maybe radians
-  }
-  else if(fabs(delta_x) < x_tresh_inf && delta_y < -y_tresh)
-  {
-    angle = (3/2)*PI;//maybe radians
-  }
-  else if(delta_x > 0 && dy_dx >= 0)
-  {
-    angle = atanf(dy_dx);
-  }
-  else if(delta_x < 0 && dy_dx <= 0)
-  {
-    angle = PI + atanf(dy_dx);
-  }
-  else if(delta_x < 0 && dy_dx >= 0)
-  {
-    angle = PI + atanf(dy_dx);
-  }
-  else if(delta_x > 0 && dy_dx <= 0)
-  {
-    angle = 2*PI + atanf(dy_dx);
-  }
-  
-  return angle;
-}
 
-void visualposition_start(void)
-{
-  computer_vision_thread_command = 1;
-  int rc = pthread_create(&computervision_thread, NULL, computervision_thread_main, NULL);
-  if(rc) {
-    printf("ctl_Init: Return code from pthread_create(mot_thread) is %d\n", rc);
-  }
-  
-  register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG", send_blob_debug);
-  
-  // Set the default tracking system position and angle
-  struct EcefCoor_d tracking_ecef;
-  tracking_ecef.x = 3924304;
-  tracking_ecef.y = 300360;
-  tracking_ecef.z = 5002162;
- // tracking_offset_angle = 123.0 / 57.6;
-  ltp_def_from_ecef_d(&tracking_ltp, &tracking_ecef);
-  
-  
-}
-
+/**
+ * Initialize the view video
+ */
 void visualposition_init(void)
 {
- /* Try to initialize the video device */
+#ifdef VIEWVIDEO_SUBDEV
+  PRINT_CONFIG_MSG("[viewvideo] Configuring a subdevice!")
+  PRINT_CONFIG_VAR(VIEWVIDEO_SUBDEV)
+
+  // Initialize the V4L2 subdevice (TODO: fix hardcoded path, which and code)
+  if (!v4l2_init_subdev(STRINGIFY(VIEWVIDEO_SUBDEV), 0, 1, V4L2_MBUS_FMT_UYVY8_2X8, VIEWVIDEO_DEVICE_SIZE)) {
+    printf("[viewvideo] Could not initialize the %s subdevice.\n", STRINGIFY(VIEWVIDEO_SUBDEV));
+    return;
+  }
+#endif
+
   // Initialize the V4L2 device
-  video.dev = v4l2_init(STRINGIFY(VIDEO_DEVICE), VIDEO_DEVICE_SIZE, VIDEO_DEVICE_BUFFERS);
-  if (video.dev == NULL) {
+  viewvideo.dev = v4l2_init(STRINGIFY(VIEWVIDEO_DEVICE), VIEWVIDEO_DEVICE_SIZE, VIEWVIDEO_DEVICE_BUFFERS);
+  if (viewvideo.dev == NULL) {
     printf("[viewvideo] Could not initialize the %s V4L2 device.\n", STRINGIFY(VIEWVIDEO_DEVICE));
     return;
   }
+
+  // Create the shot directory
+  char save_name[128];
+  sprintf(save_name, "mkdir -p %s", STRINGIFY(VIEWVIDEO_SHOT_PATH));
+  if (system(save_name) != 0) {
+    printf("[viewvideo] Could not create shot directory %s.\n", STRINGIFY(VIEWVIDEO_SHOT_PATH));
+    return;
+  }
+
+#if VIEWVIDEO_USE_NETCAT
+  // Create an Netcat receiver file for the streaming
+  sprintf(save_name, "%s/netcat-recv.sh", STRINGIFY(VIEWVIDEO_SHOT_PATH));
+  FILE *fp = fopen(save_name, "w");
+  if (fp != NULL) {
+    fprintf(fp, "i=0\n");
+    fprintf(fp, "while true\n");
+    fprintf(fp, "do\n");
+    fprintf(fp, "\tn=$(printf \"%%04d\" $i)\n");
+    fprintf(fp, "\tnc -l 0.0.0.0 %d > img_${n}.jpg\n", (int)(VIEWVIDEO_PORT_OUT));
+    fprintf(fp, "\ti=$((i+1))\n");
+    fprintf(fp, "done\n");
+    fclose(fp);
+  }
+#else
+  // Create an SDP file for the streaming
+  sprintf(save_name, "%s/stream.sdp", STRINGIFY(VIEWVIDEO_SHOT_PATH));
+  FILE *fp = fopen(save_name, "w");
+  if (fp != NULL) {
+    fprintf(fp, "v=0\n");
+    fprintf(fp, "m=video %d RTP/AVP 26\n", (int)(VIEWVIDEO_PORT_OUT));
+    fprintf(fp, "c=IN IP4 0.0.0.0\n");
+    fclose(fp);
+  }
+#endif
+//init debug
+    register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG", send_blob_debug);
+// Subscribe to the sonar_meas ABI messages
+  AbiBindMsgAGL(ABI_BROADCAST, &ev, sonar_abi);
 }
+
+/**
+ * Start with streaming
+ */
+void visualposition_start(void)
+{
+  // Check if we are already running
+  if (viewvideo.is_streaming) {
+    return;
+  }
+
+  // Start the streaming thread
+  pthread_t tid;
+  if (pthread_create(&tid, NULL, visualposition_thread, NULL) != 0) {
+    printf("[vievideo] Could not create streaming thread.\n");
+    return;
+  }
+}
+
+/**
+ * Stops the streaming
+ * This could take some time, because the thread is stopped asynchronous.
+ */
 void visualposition_stop(void)
 {
-  computer_vision_thread_command = 0;
+  // Check if not already stopped streaming
+  if (!viewvideo.is_streaming) {
+    return;
+  }
+
+  // Stop the streaming thread
+  viewvideo.is_streaming = FALSE;
+
+  // Stop the capturing
+  if (!v4l2_stop_capture(viewvideo.dev)) {
+    printf("[viewvideo] Could not stop capture of %s.\n", viewvideo.dev->name);
+    return;
+  }
+
+  // TODO: wait for the thread to finish to be able to start the thread again!
 }
 
-
-
+/**
+ * Take a shot and save it
+ * This will only work when the streaming is enabled
+ */
+void viewvideo_take_shot(bool_t take)
+{
+  viewvideo.take_shot = take;
+}

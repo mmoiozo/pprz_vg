@@ -7,7 +7,7 @@
       <define name="FAILSAFE_DESCENT_SPEED" value="0.5"/>
       <define name="USE_SONAR" value="1"/>
       <define name="INS_SONAR_VARIANCE_THRESHOLD"/>
-      <configure name="USE_MAGNETOMETER" value="0"/>
+      <configure name="USE_MAGNETOMETER" value="1"/>
       <subsystem name="telemetry" type="transparent_udp"/>
       <subsystem name="radio_control" type="datalink"/>
     </target>
@@ -29,7 +29,9 @@
 
   <modules main_freq="512">
     <load name="send_imu_mag_current.xml"/>
-    <!--<load name="agl_dist.xml"/>-->
+<!--
+    <load name="video_rtp_stream.xml"/> 
+    <load name="agl_dist.xml"/>-->
 <!--
     <load name="follow.xml">
       <define name="FOLLOW_AC_ID" value="101"/>
@@ -38,7 +40,7 @@
     </load> -->
     <load name="visualposition.xml"/>
 <!--
-     <load name="../../sw/ext/ardrone2_vision/modules/VisualPosition/visualposition.xml"/>
+    <load name="cv_opticflow.xml"/>
 -->
   </modules>
   
@@ -115,7 +117,7 @@
     <define name="H_Z" value="0.9211303"/>
 
     <!-- Use GPS heading instead of magneto -->
-    <define name="USE_GPS_HEADING" value="1"/>
+    <define name="USE_GPS_HEADING" value="0"/>
   </section>
 
   <section name="INS" prefix="INS_">
