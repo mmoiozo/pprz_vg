@@ -143,8 +143,8 @@ inline int colorblob_uyvy(struct image_t *input, struct image_t *output, uint8_t
   return cnt;
 }
 
-inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v);
-inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t *pix_x[5], uint16_t *pix_y[5], uint16_t *cp_u, uint16_t *cp_v)
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v);
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v)
 {
   int cnt[5] = {0,0,0,0,0};
   int any_match = 0;
@@ -179,20 +179,22 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
       // Color Check:
       if (
           // Light
-               (dest[1] >= filter_thresholds[i*5])
-            && (dest[1] <= filter_thresholds[(i*5)+1])
-            && (dest[0] >= filter_thresholds[(i*5)+2])
-            && (dest[0] <= filter_thresholds[(i*5)+3])
-            && (dest[2] >= filter_thresholds[(i*5)+4])
-            && (dest[2] <= filter_thresholds[(i*5)+5])
+               (dest[1] >= filter_thresholds[i*6])
+            && (dest[1] <= filter_thresholds[(i*6)+1])
+            && (dest[0] >= filter_thresholds[(i*6)+2])
+            && (dest[0] <= filter_thresholds[(i*6)+3])
+            && (dest[2] >= filter_thresholds[(i*6)+4])
+            && (dest[2] <= filter_thresholds[(i*6)+5])
          )// && (dest[2] > 128))
       {
         cnt[i] ++;
         //Binary image 1
         match[i] = 1;
-	any_match = 1;
-        
-        
+	any_match = 1; 
+      }
+      else
+      {
+	match[i] = 0;
       }
       
       }
@@ -220,7 +222,7 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
       any_match = 0;
       
       //blob center cross
-      if(x == *pix_x[0] || y == *pix_y[0])
+      if(x == (*pix_x)[1] || y == (*pix_y)[1])
       {
 	dest[0] = 64;        // U
         dest[2] = 255;        // V
@@ -259,7 +261,7 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
   {
     if(x_integral[i][c] > x_mid[c])
     {
-      *pix_x[c] = i;
+      (*pix_x)[c] = i;
       break;
     }
   }
@@ -268,7 +270,7 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
   {
     if(y_integral[j][c] > y_mid[c])
     {
-      *pix_y[c] = j;
+      (*pix_y)[c] = j;
       break;
     }
   }

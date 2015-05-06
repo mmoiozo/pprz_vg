@@ -93,7 +93,7 @@ PRINT_CONFIG_MSG("VIEWVIDEO_DEVICE_SIZE = " _SIZE_HELPER(VIEWVIDEO_DEVICE_SIZE))
 
 // The video device buffers (the amount of V4L2 buffers)
 #ifndef VIEWVIDEO_DEVICE_BUFFERS
-#define VIEWVIDEO_DEVICE_BUFFERS 10
+#define VIEWVIDEO_DEVICE_BUFFERS 15
 #endif
 PRINT_CONFIG_VAR(VIEWVIDEO_DEVICE_BUFFERS)
 
@@ -186,8 +186,9 @@ int color_count = 0;
 uint16_t blob_center_x = 0;
 uint16_t blob_center_y = 0;
 
-uint16_t blob_x[5] = {};
-uint16_t blob_y[5] = {};
+uint16_t blob_x[5] = {0,0,0,0,0};
+uint16_t blob_y[5] = {0,0,0,0,0};
+int test_blob = 0;
 
 uint16_t cp_value_u = 0;
 uint16_t cp_value_v = 0;
@@ -227,10 +228,10 @@ struct timeval end_time;
 
 
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
-			     60,160,170,195,65,95,//blue
+			     60,160,140,160,95,120,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
-			     60,160,0,0,0,0};//empt
+			     60,160,0,0,0,0};//empty
 
 // Defines to make easy use of paparazzi math
 struct EnuCoor_d pos, speed,enu;
@@ -253,10 +254,10 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 static void send_blob_debug(struct transport_tx *trans, struct link_device *dev) //static void send_blob_debug(void) 
  {
     pthread_mutex_lock(&visualposition_mutex);
- pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &sonar_debug, &blob_y_debug, &phi_temp, &theta_temp);
+ pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &phi_temp, &theta_temp);
   pthread_mutex_unlock(&visualposition_mutex);
  }
-//pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &sonar_debug, &blob_debug_y, &psi_temp, &theta_temp);
+
 
 //TIMING
 volatile long time_elapsed (struct timeval *t1, struct timeval *t2);
@@ -328,7 +329,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     // Wait for a new frame (blocking)
     struct image_t img;
     v4l2_image_get(viewvideo.dev, &img);
-    
+    /*
      color_count = colorblob_uyvy(&img,&img,
         filter_values[0],filter_values[1],
         filter_values[2],filter_values[3],
@@ -337,22 +338,22 @@ static void *visualposition_thread(void *data __attribute__((unused)))
 	&blob_center_y,
 	&cp_value_u,
         &cp_value_v
-        );
-     /*
+        );*/
+     
      color_count = multi_blob_uyvy(&img,&img,
         filter_values,
 	&blob_x,
 	&blob_y,
 	&cp_value_u,
         &cp_value_v
-        );*/
-
-      body_angle 	= stateGetNedToBodyEulers_f();//fetch the body angles
+        );
+     
+      body_angle = stateGetNedToBodyEulers_f();//fetch the body angles
       
     if(color_count > 30)
     {
     px_angle_x = (((float)blob_center_x - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
-    px_angle_y = (((float)blob_center_y - 120)/Fy)-body_angle->theta;
+    px_angle_y = (((float)blob_center_x - 120)/Fy)-body_angle->theta;
     }
     else
     {
@@ -366,13 +367,17 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     x_pos = cosf(-body_angle->psi)*x_pos_b - sinf(-body_angle->psi)*y_pos_b; //transform of body position to global position
     y_pos = cosf(-body_angle->psi)*y_pos_b + sinf(-body_angle->psi)*x_pos_b;
     
+    //printf("pos test %f %f\n",x_pos,y_pos);
     pos.x = x_pos/100; //pos.x in M
     pos.y = y_pos/100; //pos.y in M
     pos.z = h/100;// agl_dist_value_filtered; //pos.z in M
     //float sonar = (ins_impl.sonar_alt - ins_impl.sonar_offset) * INS_SONAR_SENS;
     
+    //printf("pos test %d %d %d\n",(int)pos.x,(int)pos.y,(int)pos.z);
     ecef_of_enu_point_d(&ecef_pos ,&tracking_ltp ,&pos);
+    //printf("ecef test %f %f %f\n",ecef_pos.x,ecef_pos.y,ecef_pos.z);
     lla_of_ecef_d(&lla_pos, &ecef_pos);
+    //fprintf("ecef test %f\n",&lla_pos);
     
     // Check if we have enough samples to estimate the velocity
     samples ++;
@@ -408,8 +413,8 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       sonar_debug = (int32_t)h;
      color_debug_u = (int32_t)cp_value_u;
      color_debug_v = (int32_t)cp_value_v;
-     blob_x_debug = (int32_t)x_pos;
-     blob_y_debug = (int32_t)y_pos;
+     blob_x_debug = (int32_t)blob_x[1];
+     blob_y_debug = (int32_t)blob_y[1];
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);
      
@@ -528,6 +533,13 @@ void visualposition_start(void)
     printf("[vievideo] Could not create streaming thread.\n");
     return;
   }
+   // Set the default tracking system position and angle
+  struct EcefCoor_d tracking_ecef;
+  tracking_ecef.x = 3924304;
+  tracking_ecef.y = 300360;
+  tracking_ecef.z = 5002162;
+ // tracking_offset_angle = 123.0 / 57.6;
+  ltp_def_from_ecef_d(&tracking_ltp, &tracking_ecef);
 }
 
 /**

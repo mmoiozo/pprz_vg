@@ -31,6 +31,7 @@
     <load name="send_imu_mag_current.xml"/>
 <!--
     <load name="video_rtp_stream.xml"/> 
+
     <load name="agl_dist.xml"/>-->
 <!--
     <load name="follow.xml">
@@ -38,6 +39,7 @@
       <define name="FOLLOW_WAYPOINT_ID" value="WP_p1"/>
       <define name="FOLLOW_OFFSET_Z" value="2.0"/>
     </load> -->
+
     <load name="visualposition.xml"/>
 <!--
     <load name="cv_opticflow.xml"/>

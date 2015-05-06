@@ -10,7 +10,7 @@
     </description>
     <define name="VIEWVIDEO_DEVICE" value="/dev/video2" description="The video device to capture from"/>
     <define name="VIEWVIDEO_DEVICE_SIZE" value="320,240" description="Video capture size (width, height)"/>
-    <define name="VIEWVIDEO_DEVICE_BUFFERS" value="10" description="Amount of V4L2 image buffers"/>
+    <define name="VIEWVIDEO_DEVICE_BUFFERS" value="15" description="Amount of V4L2 image buffers"/>
     <define name="VIEWVIDEO_DOWNSIZE_FACTOR" value="1" description="Reduction factor of the video stream"/>
     <define name="VIEWVIDEO_QUALITY_FACTOR" value="20" description="JPEG encoding compression factor [0-99]"/>
     <define name="VIEWVIDEO_FPS" value="10" description="Video stream frame rate"/>
