@@ -143,11 +143,12 @@ inline int colorblob_uyvy(struct image_t *input, struct image_t *output, uint8_t
   return cnt;
 }
 
-inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v);
-inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v)
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v,uint16_t (*marker_array)[15]);
+inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_t filter_thresholds[30], uint16_t (*pix_x)[5], uint16_t (*pix_y)[5], uint16_t *cp_u, uint16_t *cp_v,uint16_t (*marker_array)[15])
 {
   int cnt[5] = {0,0,0,0,0};
   int any_match = 0;
+  int marker_count = 0;
   uint8_t *source = input->buf;
   uint8_t *dest = output->buf;
   
@@ -159,6 +160,8 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
   
   uint16_t x_integral [162][5] = {};//82 162
   uint16_t y_integral [240][5] = {};//uint16_t y_integral [240] = {};
+  
+  memset((*marker_array),0,sizeof((*marker_array)));
       
 
   for (int y=0;y<output->h;y++)//output->h
@@ -262,6 +265,11 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
     if(x_integral[i][c] > x_mid[c])
     {
       (*pix_x)[c] = i;
+      if(cnt[c] > 20)
+      {
+	(*marker_array)[marker_count+1] = i;
+	(*marker_array)[marker_count] = c+1;
+      }
       break;
     }
   }
@@ -271,9 +279,14 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
     if(y_integral[j][c] > y_mid[c])
     {
       (*pix_y)[c] = j;
+      if(cnt[c] > 20)
+      {
+	(*marker_array)[marker_count+2] = j;
+	marker_count += 3;
+      }
       break;
     }
   }
       }
-  return cnt[0];
+  return (marker_count/3);
 }

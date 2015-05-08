@@ -60,6 +60,7 @@
 
 //state 
 #include "state.h"
+#include "subsystems/imu.h"
 
 // Calculations
 #include <math.h>
@@ -76,6 +77,8 @@
 //TIMGING
 #define USEC_PER_MS 1000
 #define USEC_PER_SEC 1000000
+//Math
+#define PI 3.141592653589793238462643383
 
 // The video device
 #ifndef VIEWVIDEO_DEVICE
@@ -164,6 +167,7 @@ struct viewvideo_t viewvideo = {
   int32_t phi_temp = 0;
   int32_t theta_temp = 0;
   int32_t psi_temp = 0;
+  int32_t psi_map_temp = 0;
   int32_t blob_debug_x = 0;
   int32_t blob_debug_y = 0;
   int32_t sonar_debug = 10;
@@ -188,7 +192,16 @@ uint16_t blob_center_y = 0;
 
 uint16_t blob_x[5] = {0,0,0,0,0};
 uint16_t blob_y[5] = {0,0,0,0,0};
-int test_blob = 0;
+uint16_t marker_positions[15] = {NULL};
+float marker_body_positions[10] = {};
+float marker_map[5] = {0,0,//center blob 1 orange
+			  50,0,// blob 2 blue
+			  0,0,// empty
+			  0,0,// empty
+			  0,0};// empty
+float map_body_angle = 0;
+float marker_heading = 0;
+int calc_angle = 0;
 
 uint16_t cp_value_u = 0;
 uint16_t cp_value_v = 0;
@@ -226,9 +239,18 @@ int32_t dt = 0;
 struct timeval start_time;
 struct timeval end_time;
 
+//values in flight arena
+/*
+uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
+			     60,160,150,165,85,105,//blue
+			     60,160,0,0,0,0,//empty
+			     60,160,0,0,0,0,//empty
+			     60,160,0,0,0,0};//empty
+			     */
+//values in mav lab
 
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
-			     60,160,140,160,95,120,//blue
+			     60,160,165,185,75,93,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
@@ -243,6 +265,10 @@ struct EcefCoor_d ecef_vel;       ///< Last valid ECEF velocity in meters
 //ABI
 abi_event ev;
 
+//function prototypes
+int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y);
+int get_angle(float x_a, float y_a, float x_b, float y_b, float *angle);
+
 static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 {
   // Update the distance if we got a valid measurement
@@ -254,7 +280,7 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 static void send_blob_debug(struct transport_tx *trans, struct link_device *dev) //static void send_blob_debug(void) 
  {
     pthread_mutex_lock(&visualposition_mutex);
- pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &phi_temp, &theta_temp);
+ pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r);
   pthread_mutex_unlock(&visualposition_mutex);
  }
 
@@ -308,7 +334,6 @@ static void *visualposition_thread(void *data __attribute__((unused)))
   image_create(&img_jpeg, img_small.w, img_small.h, IMAGE_JPEG);
 
   // Initialize timing
-  uint32_t microsleep = (uint32_t)(1000000. / (float)viewvideo.fps);
   int millisleep = 1;
   struct timeval last_time;
   gettimeofday(&last_time, NULL);
@@ -345,15 +370,29 @@ static void *visualposition_thread(void *data __attribute__((unused)))
 	&blob_x,
 	&blob_y,
 	&cp_value_u,
-        &cp_value_v
+        &cp_value_v,
+	&marker_positions
         );
      
       body_angle = stateGetNedToBodyEulers_f();//fetch the body angles
       
+      if(color_count > 0)
+      {
+	get_pos_b(marker_positions[1],marker_positions[2],&marker_body_positions[0],&marker_body_positions[1]);
+      }
+      //Marker selection
+      if(color_count > 1)
+      {
+	get_pos_b(marker_positions[4],marker_positions[5],&marker_body_positions[2],&marker_body_positions[3]);
+	calc_angle = get_angle(marker_body_positions[0],marker_body_positions[1],marker_body_positions[2],marker_body_positions[3],&marker_heading);
+      }
+      
+       get_angle(marker_map[0],marker_map[1],marker_map[2],marker_map[3],&map_body_angle);
+      
     if(color_count > 30)
     {
-    px_angle_x = (((float)blob_center_x - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
-    px_angle_y = (((float)blob_center_x - 120)/Fy)-body_angle->theta;
+    px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
+    px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;
     }
     else
     {
@@ -408,15 +447,27 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
       (int)(body_angle->psi*10000000.0));             //int32 Course in rad*1e7
+      
+      //optitrack coordinates in ecef
+    new_pos.x = ecef_x_optitrack/100;
+    new_pos.y = ecef_y_optitrack/100;
+    new_pos.z = ecef_z_optitrack/100;
+    
+     enu_of_ecef_point_d(&enu, &tracking_ltp, &new_pos);
+    x_pos_optitrack = (int32_t)(enu.x*100); 
+    y_pos_optitrack = (int32_t)(enu.y*100); 
+    z_pos_optitrack = (int32_t)(enu.z*100); 
  
      //Debug values
-      sonar_debug = (int32_t)h;
-     color_debug_u = (int32_t)cp_value_u;
-     color_debug_v = (int32_t)cp_value_v;
-     blob_x_debug = (int32_t)blob_x[1];
-     blob_y_debug = (int32_t)blob_y[1];
+      sonar_debug = (int32_t)z_pos_optitrack;//h;
+     color_debug_u = (int32_t)x_pos_optitrack;//color_count;//cp_value_u;
+     color_debug_v = (int32_t)y_pos_optitrack;//calc_angle;//cp_value_v;
+     blob_x_debug = (int32_t)(blob_x[0]-80);
+     blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);
+     psi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->psi);
+     psi_map_temp = ANGLE_BFP_OF_REAL(marker_heading);
      
     // Only resize when needed
     if (viewvideo.downsize_factor != 1) {
@@ -453,6 +504,63 @@ static void *visualposition_thread(void *data __attribute__((unused)))
   image_free(&img_jpeg);
   image_free(&img_small);
   return 0;
+}
+
+//get marker body marker_positions
+int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y)
+{
+   float pix_angle_x = (((float)x_pix - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
+   float pix_angle_y = (((float)y_pix - 120)/Fy)-body_angle->theta;
+   *body_x = -(tanf(pix_angle_x)*h); //x_pos in cm
+   *body_y = (tanf(pix_angle_y)*h); // y_pos in cm
+}
+
+/* calculate angle based on two points */
+int get_angle(float x_a, float y_a, float x_b, float y_b, float *angle)
+{
+  float x_tresh = 20;//treshhold value for when displacement is assumed small
+  float y_tresh = 20;
+  float delta_x = x_b - x_a;
+  float delta_y = y_b - y_a;
+  float dy_dx = delta_y/delta_x;
+  int valid_data = 0;
+  
+  if(fabs(delta_x) <= x_tresh && fabs(delta_y) <= y_tresh)
+  {
+     valid_data = 0;// no valid calculation possible
+  }
+  else if(isinf(dy_dx) == 1 && dy_dx > 0)
+  {
+    *angle = PI/2;
+    valid_data = 1;
+  }
+  else if(isinf(dy_dx) == 1 && dy_dx < 0)
+  {
+    *angle = (3/2)*PI;
+    valid_data = 1;
+  }
+  else if(delta_x > 0 && dy_dx >= 0)
+  {
+    *angle = atanf(dy_dx);
+    valid_data = 1;
+  }
+  else if(delta_x < 0 && dy_dx <= 0)
+  {
+    *angle = PI + atanf(dy_dx);
+    valid_data = 1;
+  }
+  else if(delta_x < 0 && dy_dx >= 0)
+  {
+    *angle = PI + atanf(dy_dx);
+    valid_data = 1;
+  }
+  else if(delta_x > 0 && dy_dx <= 0)
+  {
+    *angle = 2*PI + atanf(dy_dx);
+    valid_data = 1;
+  }
+  
+  return valid_data;
 }
 
 /**

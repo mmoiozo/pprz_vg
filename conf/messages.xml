@@ -1910,8 +1910,14 @@
   <message name="BLOB_DEBUG" id="217">
     <field name="blob_center_x"  type="int32"/>
     <field name="blob_center_y"  type="int32"/>
-    <field name="integral_max_x" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
-    <field name="integral_max_y" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="sonar_alt"  type="int32"/>
+    <field name="phi" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="theta" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="psi" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="psi_map" type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="gp_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
+    <field name="gq_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
+    <field name="gr_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
   </message>
 
   <message name="BEBOP_ACTUATORS" id="218">

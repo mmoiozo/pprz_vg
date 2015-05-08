@@ -57,7 +57,7 @@
 #include "led.h"
 
 //for optitrack send to modules
-#include "/home/michael/paparazzi/sw/ext/ardrone2_vision/modules/VisualPosition/visualposition.h"
+#include "/home/michael/paparazzi/sw/airborne/modules/computer_vision/VisualPosition/visualposition.h"
 
 #define IdOfMsg(x) (x[1])
 
@@ -159,11 +159,11 @@ void dl_parse_msg(void)
         DL_REMOTE_GPS_ecef_zd(dl_buffer),
         DL_REMOTE_GPS_tow(dl_buffer),
         DL_REMOTE_GPS_course(dl_buffer));*/
-     /*
-     ecef_x_optitrack = DL_REMOTE_GPS_ecef_x(dl_buffer);
+     
+   ecef_x_optitrack = DL_REMOTE_GPS_ecef_x(dl_buffer);
    ecef_y_optitrack = DL_REMOTE_GPS_ecef_y(dl_buffer);
    ecef_z_optitrack = DL_REMOTE_GPS_ecef_z(dl_buffer);
-   */
+   
       break;
 #endif
     default:

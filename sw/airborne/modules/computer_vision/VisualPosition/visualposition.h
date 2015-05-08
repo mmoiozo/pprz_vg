@@ -46,6 +46,10 @@ struct viewvideo_t {
   uint16_t shot_number;           ///< The last shot number
 };
 extern struct viewvideo_t viewvideo;
+//optitrack ecef coordinates from datalink.c
+extern int32_t ecef_x_optitrack;
+extern int32_t ecef_y_optitrack;
+extern int32_t ecef_z_optitrack;
 
 // Module functions
 extern void visualposition_init(void);
