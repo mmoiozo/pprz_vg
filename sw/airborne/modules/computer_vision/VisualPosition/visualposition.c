@@ -80,6 +80,7 @@
 //Math
 #define PI 3.141592653589793238462643383
 
+
 // The video device
 #ifndef VIEWVIDEO_DEVICE
 #define VIEWVIDEO_DEVICE /dev/video2
@@ -195,12 +196,17 @@ uint16_t blob_y[5] = {0,0,0,0,0};
 uint16_t marker_positions[15] = {NULL};
 float marker_body_positions[10] = {};
 float marker_map[5] = {0,0,//center blob 1 orange
-			  50,0,// blob 2 blue
+			  50,-10,// blob 2 blue
 			  0,0,// empty
 			  0,0,// empty
 			  0,0};// empty
+float marker_pos_g[5] = {};
 float map_body_angle = 0;
 float marker_heading = 0;
+float marker_heading_reverse = 0;
+float marker_heading_temp = 0;
+float heading_offset = 0;
+float compensated_heading = 0;
 int calc_angle = 0;
 
 uint16_t cp_value_u = 0;
@@ -214,13 +220,16 @@ float h = 0.0;
 float x_pos_b = 0.0;
 float y_pos_b = 0.0;
 
+int32_t alt_optitrack = 0;
+int32_t lat_optitrack = 0;
+int32_t lon_optitrack = 0;
 int32_t ecef_x_optitrack = 0;
 int32_t ecef_y_optitrack = 0;
 int32_t ecef_z_optitrack = 0;
 
-int32_t x_pos_optitrack = 0;
-int32_t y_pos_optitrack = 0;
-int32_t z_pos_optitrack = 0;
+float x_pos_optitrack = 0;
+float y_pos_optitrack = 0;
+float z_pos_optitrack = 0;
 
 float x_pos = 0.0;
 float y_pos = 0.0;
@@ -240,23 +249,24 @@ struct timeval start_time;
 struct timeval end_time;
 
 //values in flight arena
-/*
+
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,150,165,85,105,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-			     */
+			     
 //values in mav lab
-
+/*
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,165,185,75,93,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-
+*/
 // Defines to make easy use of paparazzi math
 struct EnuCoor_d pos, speed,enu;
+struct NedCoor_d ned;
 struct EcefCoor_d ecef_pos, new_pos;
 struct LlaCoor_d lla_pos;
 struct LtpDef_d tracking_ltp;       ///< The tracking system LTP definition
@@ -268,6 +278,7 @@ abi_event ev;
 //function prototypes
 int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y);
 int get_angle(float x_a, float y_a, float x_b, float y_b, float *angle);
+int get_pos_g(float x_body, float y_body, float *x_marker_g, float *y_marker_g);
 
 static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 {
@@ -385,9 +396,34 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       {
 	get_pos_b(marker_positions[4],marker_positions[5],&marker_body_positions[2],&marker_body_positions[3]);
 	calc_angle = get_angle(marker_body_positions[0],marker_body_positions[1],marker_body_positions[2],marker_body_positions[3],&marker_heading);
-      }
+      
       
        get_angle(marker_map[0],marker_map[1],marker_map[2],marker_map[3],&map_body_angle);
+       
+       if(marker_heading > PI)
+       {
+	 marker_heading_temp = marker_heading - (2*PI);
+       }
+       else
+       {
+	 marker_heading_temp = marker_heading;
+       }
+       
+       if(marker_heading_temp < stateGetNedToBodyEulers_f()->psi)
+       {
+       heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi + (2*PI);
+       }
+       else
+       {
+	 heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi;
+       }
+      }
+      compensated_heading = stateGetNedToBodyEulers_f()->psi + heading_offset;
+      
+   
+      get_pos_g(marker_body_positions[0], marker_body_positions[1], &marker_pos_g[0], &marker_pos_g[1]);
+      
+      marker_heading_reverse = (2*PI) - marker_heading;
       
     if(color_count > 30)
     {
@@ -446,28 +482,32 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.y*100.0), //int32 ECEF velocity Y in cm/s
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
-      (int)(body_angle->psi*10000000.0));             //int32 Course in rad*1e7
+      (int)(compensated_heading*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi
       
       //optitrack coordinates in ecef
-    new_pos.x = ecef_x_optitrack/100;
-    new_pos.y = ecef_y_optitrack/100;
-    new_pos.z = ecef_z_optitrack/100;
-    
+    new_pos.x = (float)(ecef_x_optitrack)/100.0;
+    new_pos.y = (float)(ecef_y_optitrack)/100.0;
+    new_pos.z = (float)(ecef_z_optitrack)/100.0;
+    /*
      enu_of_ecef_point_d(&enu, &tracking_ltp, &new_pos);
-    x_pos_optitrack = (int32_t)(enu.x*100); 
-    y_pos_optitrack = (int32_t)(enu.y*100); 
-    z_pos_optitrack = (int32_t)(enu.z*100); 
+    x_pos_optitrack = enu.x*100; 
+    y_pos_optitrack = enu.y*100; 
+    z_pos_optitrack = enu.z*100; */
+    ned_of_ecef_point_d(&ned, &tracking_ltp, &new_pos);
+    x_pos_optitrack = ned.x*100; 
+    y_pos_optitrack = ned.y*100; 
+    z_pos_optitrack = ned.z*100;
  
      //Debug values
-      sonar_debug = (int32_t)z_pos_optitrack;//h;
-     color_debug_u = (int32_t)x_pos_optitrack;//color_count;//cp_value_u;
-     color_debug_v = (int32_t)y_pos_optitrack;//calc_angle;//cp_value_v;
+     color_debug_u = (int32_t)marker_pos_g[0];//cp_value_u;
+     color_debug_v = (int32_t)marker_pos_g[1];//calc_angle;//cp_value_v;
+     sonar_debug = (int32_t)color_count;//h;
      blob_x_debug = (int32_t)(blob_x[0]-80);
      blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
-     theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);
-     psi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->psi);
-     psi_map_temp = ANGLE_BFP_OF_REAL(marker_heading);
+     theta_temp = ANGLE_BFP_OF_REAL(heading_offset);//stateGetNedToBodyEulers_f()->theta);
+     psi_temp = ANGLE_BFP_OF_REAL(marker_heading_reverse);//stateGetNedToBodyEulers_f()->psi);
+     psi_map_temp = ANGLE_BFP_OF_REAL(compensated_heading);
      
     // Only resize when needed
     if (viewvideo.downsize_factor != 1) {
@@ -513,6 +553,17 @@ int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y)
    float pix_angle_y = (((float)y_pix - 120)/Fy)-body_angle->theta;
    *body_x = -(tanf(pix_angle_x)*h); //x_pos in cm
    *body_y = (tanf(pix_angle_y)*h); // y_pos in cm
+}
+
+//get position in global frame based on single marker
+int get_pos_g(float x_body, float y_body, float *x_marker_g, float *y_marker_g)
+{
+  *x_marker_g = cosf(marker_heading_temp)*x_body - sinf(marker_heading_temp)*y_body;
+   *y_marker_g = sinf(marker_heading_temp)*x_body + cosf(marker_heading_temp)*y_body;
+  /*
+   *x_marker_g = cosf(marker_heading_reverse)*x_body - sinf(marker_heading_reverse)*y_body;
+   *y_marker_g = sinf(marker_heading_reverse)*x_body + cosf(marker_heading_reverse)*y_body;
+   * */
 }
 
 /* calculate angle based on two points */
@@ -642,7 +693,7 @@ void visualposition_start(void)
     return;
   }
    // Set the default tracking system position and angle
-  struct EcefCoor_d tracking_ecef;
+  struct EcefCoor_d tracking_ecef,tracking_ecef_optitrack;
   tracking_ecef.x = 3924304;
   tracking_ecef.y = 300360;
   tracking_ecef.z = 5002162;

@@ -50,6 +50,9 @@ extern struct viewvideo_t viewvideo;
 extern int32_t ecef_x_optitrack;
 extern int32_t ecef_y_optitrack;
 extern int32_t ecef_z_optitrack;
+extern int32_t alt_optitrack;
+extern int32_t lat_optitrack;
+extern int32_t lon_optitrack;
 
 // Module functions
 extern void visualposition_init(void);

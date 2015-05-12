@@ -160,8 +160,11 @@ void dl_parse_msg(void)
         DL_REMOTE_GPS_tow(dl_buffer),
         DL_REMOTE_GPS_course(dl_buffer));*/
      
+   alt_optitrack = DL_REMOTE_GPS_alt(dl_buffer);
+   lat_optitrack = DL_REMOTE_GPS_lat(dl_buffer);
+   lon_optitrack = DL_REMOTE_GPS_lon(dl_buffer);
    ecef_x_optitrack = DL_REMOTE_GPS_ecef_x(dl_buffer);
-   ecef_y_optitrack = DL_REMOTE_GPS_ecef_y(dl_buffer);
+   ecef_y_optitrack = DL_REMOTE_GPS_ecef_x(dl_buffer);//DL_REMOTE_GPS_ecef_y(dl_buffer);
    ecef_z_optitrack = DL_REMOTE_GPS_ecef_z(dl_buffer);
    
       break;

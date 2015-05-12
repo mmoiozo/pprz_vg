@@ -225,7 +225,7 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
       any_match = 0;
       
       //blob center cross
-      if(x == (*pix_x)[1] || y == (*pix_y)[1])
+      if(x == (*pix_x)[0] || y == (*pix_y)[0])
       {
 	dest[0] = 64;        // U
         dest[2] = 255;        // V
