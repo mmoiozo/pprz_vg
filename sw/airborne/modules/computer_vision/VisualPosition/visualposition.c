@@ -187,7 +187,7 @@ uint8_t color_cr_min  = 65;//170;
 uint8_t color_cr_max  = 95;//240;
 
 int color_count = 0;
-
+uint32_t markers_detected = 0;
 uint16_t blob_center_x = 0;
 uint16_t blob_center_y = 0;
 
@@ -291,7 +291,7 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 static void send_blob_debug(struct transport_tx *trans, struct link_device *dev) //static void send_blob_debug(void) 
  {
     pthread_mutex_lock(&visualposition_mutex);
- pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r);
+ pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &ecef_x_optitrack, &ecef_y_optitrack, &ecef_z_optitrack, &markers_detected, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r);
   pthread_mutex_unlock(&visualposition_mutex);
  }
 
@@ -418,12 +418,20 @@ static void *visualposition_thread(void *data __attribute__((unused)))
 	 heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi;
        }
       }
-      compensated_heading = stateGetNedToBodyEulers_f()->psi + heading_offset;
+      compensated_heading = stateGetNedToBodyEulers_f()->psi + heading_offset;//+0.244 radians compensation?
+      if(compensated_heading < -PI)
+      {
+	compensated_heading = (2*PI) + compensated_heading;
+      }
+      if(compensated_heading > PI)
+      {
+	compensated_heading = compensated_heading - (2*PI);
+      }
       marker_heading_reverse = (2*PI) - marker_heading;
    
       get_pos_g(marker_body_positions[0], marker_body_positions[1], &marker_pos_g[0], &marker_pos_g[1]);
       
-      
+      markers_detected = marker_positions[0] + marker_positions[3];
       
     if(marker_positions[0] == 1)
     {
@@ -471,7 +479,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     samples = 0;
     av_time = 0;
     }
-/*
+
       parse_gps_datalink(
       1,                //uint8 Number of markers (sv_num)
       (int)(ecef_pos.x*100.0),                //int32 ECEF X in CM
@@ -485,8 +493,8 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.y*100.0), //int32 ECEF velocity Y in cm/s
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
-      (int)(compensated_heading*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi
-      */
+      (int)(compensated_heading*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi//compensated_heading*10000000.0)
+      
       //optitrack coordinates in ecef
     new_pos.x = DOUBLE_OF_BFP(ecef_x_optitrack,8);//POS_FLOAT_OF_BFP(ecef_x_optitrack);
     new_pos.y = DOUBLE_OF_BFP(ecef_y_optitrack,8);//POS_FLOAT_OF_BFP(ecef_y_optitrack);
@@ -502,9 +510,9 @@ static void *visualposition_thread(void *data __attribute__((unused)))
    // z_pos_optitrack = ned.z*100;
  
      //Debug values
-     color_debug_u = (int32_t)ecef_x_optitrack;//marker_body_positions[0];//x_pos_optitrack;//x_pos;//marker_pos_g[0];//cp_value_u;
-     color_debug_v = (int32_t)ecef_y_optitrack;//marker_body_positions[1];//y_pos_optitrack;//y_pos;//marker_pos_g[1];//calc_angle;//cp_value_v;
-     sonar_debug = (int32_t)z_pos_optitrack;//marker_positions[0];//color_count;//h;
+     color_debug_u = (int32_t)x_pos;//marker_body_positions[0];//x_pos_optitrack;//x_pos;//marker_pos_g[0];//cp_value_u;
+     color_debug_v = (int32_t)y_pos;//marker_body_positions[1];//y_pos_optitrack;//y_pos;//marker_pos_g[1];//calc_angle;//cp_value_v;
+     sonar_debug = (int32_t)h;//marker_positions[0];//color_count;//h;
      blob_x_debug = (int32_t)(blob_x[0]-80);
      blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);

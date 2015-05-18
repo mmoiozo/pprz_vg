@@ -143,7 +143,7 @@ void dl_parse_msg(void)
     case DL_REMOTE_GPS :
       // Check if the GPS is for this AC
       if (DL_REMOTE_GPS_ac_id(dl_buffer) != AC_ID) { break; }
-
+/*
       // Parse the GPS
       parse_gps_datalink(
         DL_REMOTE_GPS_numsv(dl_buffer),
@@ -159,14 +159,14 @@ void dl_parse_msg(void)
         DL_REMOTE_GPS_ecef_zd(dl_buffer),
         DL_REMOTE_GPS_tow(dl_buffer),
         DL_REMOTE_GPS_course(dl_buffer));
-     /*
+     */
    alt_optitrack = DL_REMOTE_GPS_alt(dl_buffer);
    lat_optitrack = DL_REMOTE_GPS_lat(dl_buffer);
    lon_optitrack = DL_REMOTE_GPS_lon(dl_buffer);
    ecef_x_optitrack = DL_REMOTE_GPS_ecef_x(dl_buffer);
    ecef_y_optitrack = DL_REMOTE_GPS_ecef_y(dl_buffer);
-   ecef_z_optitrack = DL_REMOTE_GPS_ecef_z(dl_buffer);
-   */
+   ecef_z_optitrack = DL_REMOTE_GPS_alt(dl_buffer);
+   
       break;
 #endif
     default:
