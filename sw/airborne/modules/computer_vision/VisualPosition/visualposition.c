@@ -396,7 +396,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       {
 	get_pos_b(marker_positions[4],marker_positions[5],&marker_body_positions[2],&marker_body_positions[3]);
 	calc_angle = get_angle(marker_body_positions[0],marker_body_positions[1],marker_body_positions[2],marker_body_positions[3],&marker_heading);
-      
+      //marker heading 0 to 360 deg (in radians)
       
        get_angle(marker_map[0],marker_map[1],marker_map[2],marker_map[3],&map_body_angle);
        
@@ -419,16 +419,16 @@ static void *visualposition_thread(void *data __attribute__((unused)))
        }
       }
       compensated_heading = stateGetNedToBodyEulers_f()->psi + heading_offset;
-      
+      marker_heading_reverse = (2*PI) - marker_heading;
    
       get_pos_g(marker_body_positions[0], marker_body_positions[1], &marker_pos_g[0], &marker_pos_g[1]);
       
-      marker_heading_reverse = (2*PI) - marker_heading;
       
-    if(color_count > 30)
+      
+    if(marker_positions[0] == 1)
     {
-    px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob
-    px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;
+    px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob//marker_positions[1]
+    px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;//marker_positions[2]
     }
     else
     {
@@ -439,8 +439,11 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
     
+    x_pos = cosf(-compensated_heading)*x_pos_b - sinf(-compensated_heading)*y_pos_b; //transform of body position to global position
+    y_pos = cosf(-compensated_heading)*y_pos_b + sinf(-compensated_heading)*x_pos_b;//try (-x_pos_b) etc heading should be 0 to 360 form or -180 to 180 positive clockwise marker_heading_reverse
+    /*
     x_pos = cosf(-body_angle->psi)*x_pos_b - sinf(-body_angle->psi)*y_pos_b; //transform of body position to global position
-    y_pos = cosf(-body_angle->psi)*y_pos_b + sinf(-body_angle->psi)*x_pos_b;
+    y_pos = cosf(-body_angle->psi)*y_pos_b + sinf(-body_angle->psi)*x_pos_b;*/
     
     //printf("pos test %f %f\n",x_pos,y_pos);
     pos.x = x_pos/100; //pos.x in M
@@ -468,7 +471,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     samples = 0;
     av_time = 0;
     }
-
+/*
       parse_gps_datalink(
       1,                //uint8 Number of markers (sv_num)
       (int)(ecef_pos.x*100.0),                //int32 ECEF X in CM
@@ -483,31 +486,31 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
       (int)(compensated_heading*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi
-      
+      */
       //optitrack coordinates in ecef
-    new_pos.x = (float)(ecef_x_optitrack)/100.0;
-    new_pos.y = (float)(ecef_y_optitrack)/100.0;
-    new_pos.z = (float)(ecef_z_optitrack)/100.0;
-    /*
+    new_pos.x = DOUBLE_OF_BFP(ecef_x_optitrack,8);//POS_FLOAT_OF_BFP(ecef_x_optitrack);
+    new_pos.y = DOUBLE_OF_BFP(ecef_y_optitrack,8);//POS_FLOAT_OF_BFP(ecef_y_optitrack);
+    new_pos.z = DOUBLE_OF_BFP(ecef_z_optitrack,8);//POS_FLOAT_OF_BFP(ecef_z_optitrack);
+    
      enu_of_ecef_point_d(&enu, &tracking_ltp, &new_pos);
     x_pos_optitrack = enu.x*100; 
     y_pos_optitrack = enu.y*100; 
-    z_pos_optitrack = enu.z*100; */
-    ned_of_ecef_point_d(&ned, &tracking_ltp, &new_pos);
-    x_pos_optitrack = ned.x*100; 
-    y_pos_optitrack = ned.y*100; 
-    z_pos_optitrack = ned.z*100;
+    z_pos_optitrack = enu.z*100; 
+    //ned_of_ecef_point_d(&ned, &tracking_ltp, &new_pos);
+   // x_pos_optitrack = ned.x*100; 
+   // y_pos_optitrack = ned.y*100; 
+   // z_pos_optitrack = ned.z*100;
  
      //Debug values
-     color_debug_u = (int32_t)marker_pos_g[0];//cp_value_u;
-     color_debug_v = (int32_t)marker_pos_g[1];//calc_angle;//cp_value_v;
-     sonar_debug = (int32_t)color_count;//h;
+     color_debug_u = (int32_t)ecef_x_optitrack;//marker_body_positions[0];//x_pos_optitrack;//x_pos;//marker_pos_g[0];//cp_value_u;
+     color_debug_v = (int32_t)ecef_y_optitrack;//marker_body_positions[1];//y_pos_optitrack;//y_pos;//marker_pos_g[1];//calc_angle;//cp_value_v;
+     sonar_debug = (int32_t)z_pos_optitrack;//marker_positions[0];//color_count;//h;
      blob_x_debug = (int32_t)(blob_x[0]-80);
      blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(heading_offset);//stateGetNedToBodyEulers_f()->theta);
-     psi_temp = ANGLE_BFP_OF_REAL(marker_heading_reverse);//stateGetNedToBodyEulers_f()->psi);
-     psi_map_temp = ANGLE_BFP_OF_REAL(compensated_heading);
+     psi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
+     psi_map_temp = ANGLE_BFP_OF_REAL(compensated_heading);//marker_heading);
      
     // Only resize when needed
     if (viewvideo.downsize_factor != 1) {
@@ -557,13 +560,16 @@ int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y)
 
 //get position in global frame based on single marker
 int get_pos_g(float x_body, float y_body, float *x_marker_g, float *y_marker_g)
-{
-  *x_marker_g = cosf(marker_heading_temp)*x_body - sinf(marker_heading_temp)*y_body;
+{/*
+  *x_marker_g = cosf(marker_heading_temp)*x_body - sinf(marker_heading_temp)*y_body;//try -marker_heading_temp
    *y_marker_g = sinf(marker_heading_temp)*x_body + cosf(marker_heading_temp)*y_body;
-  /*
-   *x_marker_g = cosf(marker_heading_reverse)*x_body - sinf(marker_heading_reverse)*y_body;
-   *y_marker_g = sinf(marker_heading_reverse)*x_body + cosf(marker_heading_reverse)*y_body;
-   * */
+  */
+   *x_marker_g = cosf(marker_heading_reverse)*(-x_body) - sinf(marker_heading_reverse)*(-y_body);
+   *y_marker_g = sinf(marker_heading_reverse)*(-x_body) + cosf(marker_heading_reverse)*(-y_body);
+   /*
+   *x_marker_g = cosf(marker_heading)*(-x_body) + sinf(marker_heading)*(-y_body);
+   *y_marker_g = -sinf(marker_heading)*(-x_body) + cosf(marker_heading)*(-y_body);
+   */
 }
 
 /* calculate angle based on two points */
