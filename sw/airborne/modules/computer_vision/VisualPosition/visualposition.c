@@ -74,6 +74,8 @@
 //camera angles
 #define Fx		171.5606 //due to chroma downsampling in x-direction 343.1211 // Camera focal length (px/rad)
 #define Fy		348.5053 // Camera focal length (px/rad)
+#define Fxx		168.89   //camera focal length in x pixel units
+#define Fyy		337.78  //camera focal length in y pixel units
 //TIMGING
 #define USEC_PER_MS 1000
 #define USEC_PER_SEC 1000000
@@ -249,21 +251,21 @@ struct timeval start_time;
 struct timeval end_time;
 
 //values in flight arena
-
+/*
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,150,165,85,105,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-			     
+			     */
 //values in mav lab
-/*
+
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,165,185,75,93,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-*/
+
 // Defines to make easy use of paparazzi math
 struct EnuCoor_d pos, speed,enu;
 struct NedCoor_d ned;
@@ -411,14 +413,14 @@ static void *visualposition_thread(void *data __attribute__((unused)))
        
        if(marker_heading_temp < stateGetNedToBodyEulers_f()->psi)
        {
-       heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi + (2*PI);
+       heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi + (2*PI);//+0.244
        }
        else
        {
-	 heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi;
+	 heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi;//+0.244
        }
       }
-      compensated_heading = stateGetNedToBodyEulers_f()->psi + heading_offset;//+0.244 radians compensation?
+      compensated_heading = marker_heading_temp + 0.244;//stateGetNedToBodyEulers_f()->psi + heading_offset;//+0.244 radians compensation
       if(compensated_heading < -PI)
       {
 	compensated_heading = (2*PI) + compensated_heading;
@@ -435,8 +437,10 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       
     if(marker_positions[0] == 1)
     {
-    px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob//marker_positions[1]
-    px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;//marker_positions[2]
+    //px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob//marker_positions[1]
+    //px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;//marker_positions[2]
+    px_angle_x = atanf(((float)blob_x[0] - 80)/Fxx)-body_angle->phi;//
+    px_angle_y = atanf(((float)blob_y[0] - 120)/Fyy)-body_angle->theta;//
     }
     else
     {
@@ -447,8 +451,11 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
     
-    x_pos = cosf(-compensated_heading)*x_pos_b - sinf(-compensated_heading)*y_pos_b; //transform of body position to global position
-    y_pos = cosf(-compensated_heading)*y_pos_b + sinf(-compensated_heading)*x_pos_b;//try (-x_pos_b) etc heading should be 0 to 360 form or -180 to 180 positive clockwise marker_heading_reverse
+    x_pos = cosf(-marker_heading_temp)*x_pos_b - sinf(-marker_heading_temp)*y_pos_b; 
+    y_pos = cosf(-marker_heading_temp)*y_pos_b + sinf(-marker_heading_temp)*x_pos_b;
+    
+    //x_pos = cosf(-compensated_heading)*x_pos_b - sinf(-compensated_heading)*y_pos_b; //transform of body position to global position
+    //y_pos = cosf(-compensated_heading)*y_pos_b + sinf(-compensated_heading)*x_pos_b;//try (-x_pos_b) etc heading should be 0 to 360 form or -180 to 180 positive clockwise marker_heading_reverse
     /*
     x_pos = cosf(-body_angle->psi)*x_pos_b - sinf(-body_angle->psi)*y_pos_b; //transform of body position to global position
     y_pos = cosf(-body_angle->psi)*y_pos_b + sinf(-body_angle->psi)*x_pos_b;*/
@@ -493,7 +500,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.y*100.0), //int32 ECEF velocity Y in cm/s
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
-      (int)(compensated_heading*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi//compensated_heading*10000000.0)
+      (int)((compensated_heading)*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi//compensated_heading*10000000.0)
       
       //optitrack coordinates in ecef
     new_pos.x = DOUBLE_OF_BFP(ecef_x_optitrack,8);//POS_FLOAT_OF_BFP(ecef_x_optitrack);
@@ -516,9 +523,9 @@ static void *visualposition_thread(void *data __attribute__((unused)))
      blob_x_debug = (int32_t)(blob_x[0]-80);
      blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
-     theta_temp = ANGLE_BFP_OF_REAL(heading_offset);//stateGetNedToBodyEulers_f()->theta);
+     theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);//stateGetNedToBodyEulers_f()->theta);//heading_offset
      psi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
-     psi_map_temp = ANGLE_BFP_OF_REAL(compensated_heading);//marker_heading);
+     psi_map_temp = ANGLE_BFP_OF_REAL((marker_heading_temp));//marker_heading);
      
     // Only resize when needed
     if (viewvideo.downsize_factor != 1) {

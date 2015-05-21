@@ -209,7 +209,7 @@
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <!-- Good weather -->
-    <define name="MAX_BANK" value="10" unit="deg"/><!--MAX_BANK was 20-->
+    <define name="MAX_BANK" value="5" unit="deg"/><!--MAX_BANK was 20-->
     <!-- Bad weather -->
     <!-- define name="MAX_BANK" value="32" unit="deg"/ -->
 
@@ -220,9 +220,9 @@
     <define name="REF_MAX_SPEED" value="3"/>
 
     <!-- gains -->
-    <define name="PGAIN" value="36"/>
-    <define name="DGAIN" value="0"/>
-    <define name="IGAIN" value="17"/>
+    <define name="PGAIN" value="116"/><!--36-->
+    <define name="DGAIN" value="60"/><!--0-->
+    <define name="IGAIN" value="30"/><!--17-->
     <define name="VGAIN" value="0"/>
     <define name="AGAIN" value="62"/>
   </section>
