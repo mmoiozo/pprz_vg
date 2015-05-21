@@ -251,21 +251,21 @@ struct timeval start_time;
 struct timeval end_time;
 
 //values in flight arena
-/*
+
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,150,165,85,105,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-			     */
+			     
 //values in mav lab
-
+/*
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,165,185,75,93,//blue
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0,//empty
 			     60,160,0,0,0,0};//empty
-
+*/
 // Defines to make easy use of paparazzi math
 struct EnuCoor_d pos, speed,enu;
 struct NedCoor_d ned;
@@ -451,8 +451,8 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
     
-    x_pos = cosf(-marker_heading_temp)*x_pos_b - sinf(-marker_heading_temp)*y_pos_b; 
-    y_pos = cosf(-marker_heading_temp)*y_pos_b + sinf(-marker_heading_temp)*x_pos_b;
+    x_pos = (cosf(-marker_heading_temp)*x_pos_b - sinf(-marker_heading_temp)*y_pos_b)*0.7;//*0.7
+    y_pos = (cosf(-marker_heading_temp)*y_pos_b + sinf(-marker_heading_temp)*x_pos_b)*0.8;//*0.8
     
     //x_pos = cosf(-compensated_heading)*x_pos_b - sinf(-compensated_heading)*y_pos_b; //transform of body position to global position
     //y_pos = cosf(-compensated_heading)*y_pos_b + sinf(-compensated_heading)*x_pos_b;//try (-x_pos_b) etc heading should be 0 to 360 form or -180 to 180 positive clockwise marker_heading_reverse
@@ -502,19 +502,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       0,
       (int)((compensated_heading)*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi//compensated_heading*10000000.0)
       
-      //optitrack coordinates in ecef
-    new_pos.x = DOUBLE_OF_BFP(ecef_x_optitrack,8);//POS_FLOAT_OF_BFP(ecef_x_optitrack);
-    new_pos.y = DOUBLE_OF_BFP(ecef_y_optitrack,8);//POS_FLOAT_OF_BFP(ecef_y_optitrack);
-    new_pos.z = DOUBLE_OF_BFP(ecef_z_optitrack,8);//POS_FLOAT_OF_BFP(ecef_z_optitrack);
-    
-     enu_of_ecef_point_d(&enu, &tracking_ltp, &new_pos);
-    x_pos_optitrack = enu.x*100; 
-    y_pos_optitrack = enu.y*100; 
-    z_pos_optitrack = enu.z*100; 
-    //ned_of_ecef_point_d(&ned, &tracking_ltp, &new_pos);
-   // x_pos_optitrack = ned.x*100; 
-   // y_pos_optitrack = ned.y*100; 
-   // z_pos_optitrack = ned.z*100;
+
  
      //Debug values
      color_debug_u = (int32_t)x_pos;//marker_body_positions[0];//x_pos_optitrack;//x_pos;//marker_pos_g[0];//cp_value_u;
@@ -524,7 +512,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
      blob_y_debug = (int32_t)(blob_y[0]-120);
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);//stateGetNedToBodyEulers_f()->theta);//heading_offset
-     psi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
+     psi_temp = ANGLE_BFP_OF_REAL(compensated_heading);//stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
      psi_map_temp = ANGLE_BFP_OF_REAL((marker_heading_temp));//marker_heading);
      
     // Only resize when needed
