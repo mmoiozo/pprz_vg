@@ -1,14 +1,18 @@
 <!DOCTYPE flight_plan SYSTEM "flight_plan.dtd">
 
-<flight_plan alt="2" ground_alt="0" lat0="51.990639" lon0="4.376807" max_dist_from_home="10" name="Rotorcraft visual position" security_height="2">
+<!--
+<flight_plan alt="2" ground_alt="0" lat0="51.990639" lon0="4.376807" max_dist_from_home="10" name="Rotorcraft visual position" security_height="2">-->
+<flight_plan alt="2" ground_alt="0" lat0="51.990635" lon0="4.376795" max_dist_from_home="10" name="Rotorcraft visual position" security_height="2">
   <header>
 #include "autopilot.h"
 </header>
   <waypoints>
     <waypoint name="HOME" x="0.0" y="0.0"/>
     <waypoint name="CLIMB" x="0.0" y="5.0"/>
-    <waypoint alt="4.0" name="STDBY" x="0.0" y="0.0"/>
-    <waypoint alt="4.0" name="TD" x="-1.0" y="0.0"/>
+    <waypoint alt="3.0" name="STDBY" x="0.0" y="0.0"/>
+    <waypoint alt="3.0" name="TD" x="0.5" y="0.0"/>
+    <waypoint alt="3.0" name="Left" x="-0.5" y="0.0"/>
+    <waypoint alt="3.0" name="Right" x="0.5" y="0.0"/>
     <waypoint lat="51.990639" lon="4.376807" name="p1"/>
     <waypoint lat="51.990624" lon="4.376767" name="p2"/>
     <waypoint lat="51.990648" lon="4.376745" name="p3"/>
@@ -32,11 +36,12 @@
       <while cond="!GpsFixValid()"/>
     </block>
     <block name="Geo init">
+<!--
       <while cond="LessThan(NavBlockTime(), 10)"/>
       <call fun="NavSetWaypointHere(WP_HOME)"/>
       <call fun="NavSetWaypointHere(WP_CLIMB)"/>
       <call fun="NavSetWaypointHere(WP_STDBY)"/>
-      <call fun="NavSetWaypointHere(WP_TD)"/>
+      <call fun="NavSetWaypointHere(WP_TD)"/>-->
       <call fun="NavSetAltitudeReferenceHere()"/>
     </block>
     <block name="Holding point">
@@ -54,6 +59,18 @@
     </block>
     <block name="Standby" strip_button="Standby" strip_icon="home.png">
       <stay wp="STDBY"/>
+    </block>
+    <block name="stay_right">
+      <stay wp="Right"/>
+    </block>
+    <block name="stay_left">
+      <stay wp="Left"/>
+    </block>
+    <block name="line_Right_Left">
+      <go from="Right" hmode="route" wp="Left"/>
+      <stay until="stage_time>30" wp="Left"/>
+      <go from="Left" hmode="route" wp="Right"/>
+      <deroute block="stay_right"/>
     </block>
     <block name="stay_td">
       <stay wp="TD"/>

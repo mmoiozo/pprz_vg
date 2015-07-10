@@ -198,7 +198,7 @@ uint16_t blob_y[5] = {0,0,0,0,0};
 uint16_t marker_positions[15] = {NULL};
 float marker_body_positions[10] = {};
 float marker_map[5] = {0,0,//center blob 1 orange
-			  50,-10,// blob 2 blue
+			  50,0,// blob 2 blue
 			  0,0,// empty
 			  0,0,// empty
 			  0,0};// empty
@@ -254,9 +254,9 @@ struct timeval end_time;
 
 uint8_t filter_values[30] = {60,160,95,125,170,240,//orange
 			     60,160,150,165,85,105,//blue
-			     60,160,0,0,0,0,//empty
-			     60,160,0,0,0,0,//empty
-			     60,160,0,0,0,0};//empty
+			     60,160,0,0,0,0,//green
+			     60,160,0,0,0,0,//yellow
+			     60,160,0,0,0,0};//red
 			     
 //values in mav lab
 /*
@@ -286,7 +286,7 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 {
   // Update the distance if we got a valid measurement
   if (distance > 0) {
-    h = distance*100;//in cm
+    h = distance*100*0.7;//in cm 0.7 scale factor sonar of drone might be broken
   }
 }
 
@@ -367,17 +367,8 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     // Wait for a new frame (blocking)
     struct image_t img;
     v4l2_image_get(viewvideo.dev, &img);
-    /*
-     color_count = colorblob_uyvy(&img,&img,
-        filter_values[0],filter_values[1],
-        filter_values[2],filter_values[3],
-        filter_values[4],filter_values[5],
-	&blob_center_x,
-	&blob_center_y,
-	&cp_value_u,
-        &cp_value_v
-        );*/
      
+    //function multi_blob_uyvy calculates the center of a multiple blobs based on color filter values and returns the number of detected blobs 
      color_count = multi_blob_uyvy(&img,&img,
         filter_values,
 	&blob_x,
@@ -389,19 +380,21 @@ static void *visualposition_thread(void *data __attribute__((unused)))
      
       body_angle = stateGetNedToBodyEulers_f();//fetch the body angles
       
+      //get marker body positions
       if(color_count > 0)
       {
 	get_pos_b(marker_positions[1],marker_positions[2],&marker_body_positions[0],&marker_body_positions[1]);
       }
-      //Marker selection
+      //if two markers are detected, calculate heading angle
       if(color_count > 1)
       {
 	get_pos_b(marker_positions[4],marker_positions[5],&marker_body_positions[2],&marker_body_positions[3]);
 	calc_angle = get_angle(marker_body_positions[0],marker_body_positions[1],marker_body_positions[2],marker_body_positions[3],&marker_heading);
       //marker heading 0 to 360 deg (in radians)
-      
+	
+      //calculate heading angle of marker pair based on marker positions stored in the map 
        get_angle(marker_map[0],marker_map[1],marker_map[2],marker_map[3],&map_body_angle);
-       
+       //heading from 0 to 360 / -180 to 180
        if(marker_heading > PI)
        {
 	 marker_heading_temp = marker_heading - (2*PI);
@@ -410,7 +403,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
        {
 	 marker_heading_temp = marker_heading;
        }
-       
+       //calculate heading offset from psi body angle
        if(marker_heading_temp < stateGetNedToBodyEulers_f()->psi)
        {
        heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi + (2*PI);//+0.244
@@ -419,8 +412,11 @@ static void *visualposition_thread(void *data __attribute__((unused)))
        {
 	 heading_offset = marker_heading_temp - stateGetNedToBodyEulers_f()->psi;//+0.244
        }
+       
       }
-      compensated_heading = marker_heading_temp + 0.244;//stateGetNedToBodyEulers_f()->psi + heading_offset;//+0.244 radians compensation
+      //compensated heading
+      compensated_heading = marker_heading_temp + 0.244;//+0.244 radians compensation
+      //0 to 360 / -180 to 180
       if(compensated_heading < -PI)
       {
 	compensated_heading = (2*PI) + compensated_heading;
@@ -429,16 +425,18 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       {
 	compensated_heading = compensated_heading - (2*PI);
       }
+      
+      //mirrored version of heading 
       marker_heading_reverse = (2*PI) - marker_heading;
-   
+      
       get_pos_g(marker_body_positions[0], marker_body_positions[1], &marker_pos_g[0], &marker_pos_g[1]);
       
+      // which markers are detected, for debug
       markers_detected = marker_positions[0] + marker_positions[3];
       
-    if(marker_positions[0] == 1)
+      // if one of the markers is detected, then calculate marker angle wrt optical center else set to zero.
+    if(marker_positions[0] == 1||marker_positions[0] == 2)
     {
-    //px_angle_x = (((float)blob_x[0] - 80)/Fx)-body_angle->phi;//calculate the angle with respect to the blob//marker_positions[1]
-    //px_angle_y = (((float)blob_y[0] - 120)/Fy)-body_angle->theta;//marker_positions[2]
     px_angle_x = atanf(((float)blob_x[0] - 80)/Fxx)-body_angle->phi;//
     px_angle_y = atanf(((float)blob_y[0] - 120)/Fyy)-body_angle->theta;//
     }
@@ -448,29 +446,28 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       px_angle_y = 0;
     }
     
+    // x and y positions in body coordinates
     x_pos_b = -(tanf(px_angle_x)*h); //x_pos in cm
     y_pos_b = (tanf(px_angle_y)*h); // y_pos in cm
     
-    x_pos = (cosf(-marker_heading_temp)*x_pos_b - sinf(-marker_heading_temp)*y_pos_b)*0.7;//*0.7
-    y_pos = (cosf(-marker_heading_temp)*y_pos_b + sinf(-marker_heading_temp)*x_pos_b)*0.8;//*0.8
+    // x and y angles in global coordinates 
+    x_pos = cosf(-marker_heading_temp)*x_pos_b - sinf(-marker_heading_temp)*y_pos_b;
+    y_pos = cosf(-marker_heading_temp)*y_pos_b + sinf(-marker_heading_temp)*x_pos_b;//
     
-    //x_pos = cosf(-compensated_heading)*x_pos_b - sinf(-compensated_heading)*y_pos_b; //transform of body position to global position
-    //y_pos = cosf(-compensated_heading)*y_pos_b + sinf(-compensated_heading)*x_pos_b;//try (-x_pos_b) etc heading should be 0 to 360 form or -180 to 180 positive clockwise marker_heading_reverse
-    /*
-    x_pos = cosf(-body_angle->psi)*x_pos_b - sinf(-body_angle->psi)*y_pos_b; //transform of body position to global position
-    y_pos = cosf(-body_angle->psi)*y_pos_b + sinf(-body_angle->psi)*x_pos_b;*/
+    // if blue marker is the only marker, use an offset of 50 centimeters.
+    if(marker_positions[0] == 2)
+    {
+      x_pos -= 50;//50cm offset on map
+    }
     
-    //printf("pos test %f %f\n",x_pos,y_pos);
+    
     pos.x = x_pos/100; //pos.x in M
     pos.y = y_pos/100; //pos.y in M
-    pos.z = h/100;// agl_dist_value_filtered; //pos.z in M
-    //float sonar = (ins_impl.sonar_alt - ins_impl.sonar_offset) * INS_SONAR_SENS;
+    pos.z = h/100;// pos.z in M
     
-    //printf("pos test %d %d %d\n",(int)pos.x,(int)pos.y,(int)pos.z);
+    //ENU to ECEF coordinate transform
     ecef_of_enu_point_d(&ecef_pos ,&tracking_ltp ,&pos);
-    //printf("ecef test %f %f %f\n",ecef_pos.x,ecef_pos.y,ecef_pos.z);
     lla_of_ecef_d(&lla_pos, &ecef_pos);
-    //fprintf("ecef test %f\n",&lla_pos);
     
     // Check if we have enough samples to estimate the velocity
     samples ++;
@@ -487,6 +484,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     av_time = 0;
     }
 
+    // parse coordinates to the datalink gps 
       parse_gps_datalink(
       1,                //uint8 Number of markers (sv_num)
       (int)(ecef_pos.x*100.0),                //int32 ECEF X in CM
@@ -500,22 +498,22 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       (int)(ecef_vel.y*100.0), //int32 ECEF velocity Y in cm/s
       (int)(ecef_vel.z*100.0), //int32 ECEF velocity Z in cm/s
       0,
-      (int)((compensated_heading)*10000000.0));             //int32 Course in rad*1e7 //body_angle->psi//compensated_heading*10000000.0)
+      (int)((compensated_heading)*10000000.0));             //int32 Course in rad*1e7 
       
 
  
      //Debug values
-     color_debug_u = (int32_t)x_pos;//marker_body_positions[0];//x_pos_optitrack;//x_pos;//marker_pos_g[0];//cp_value_u;
-     color_debug_v = (int32_t)y_pos;//marker_body_positions[1];//y_pos_optitrack;//y_pos;//marker_pos_g[1];//calc_angle;//cp_value_v;
-     sonar_debug = (int32_t)h;//marker_positions[0];//color_count;//h;
-     blob_x_debug = (int32_t)(blob_x[0]-80);
-     blob_y_debug = (int32_t)(blob_y[0]-120);
+     color_debug_u = (int32_t)x_pos;//debug value vision based x position 
+     color_debug_v = (int32_t)y_pos;//debug value vision based y position
+     sonar_debug = (int32_t)h;//sonar altitude 
+     blob_x_debug = (int32_t)(blob_x[0]-80);// x position in pixels of first detected blob
+     blob_y_debug = (int32_t)(blob_y[0]-120);// y position in pixels of first detected blob
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);//stateGetNedToBodyEulers_f()->theta);//heading_offset
-     psi_temp = ANGLE_BFP_OF_REAL(compensated_heading);//stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
-     psi_map_temp = ANGLE_BFP_OF_REAL((marker_heading_temp));//marker_heading);
+     psi_temp = ANGLE_BFP_OF_REAL(marker_heading_temp);//stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
+     psi_map_temp = ANGLE_BFP_OF_REAL((compensated_heading));//marker_heading);
      
-    // Only resize when needed
+    // encode video feed
     if (viewvideo.downsize_factor != 1) {
       image_yuv422_downsample(&img, &img_small, viewvideo.downsize_factor);
       jpeg_encode_image(&img_small, &img_jpeg, VIEWVIDEO_QUALITY_FACTOR, VIEWVIDEO_USE_NETCAT);
@@ -533,15 +531,6 @@ static void *visualposition_thread(void *data __attribute__((unused)))
       0,                        // DRI Header
       VIEWVIDEO_RTP_TIME_INC    // 90kHz time increment
     );
-    // Extra note: when the time increment is set to 0,
-    // it is automaticaly calculated by the send_rtp_frame function
-    // based on gettimeofday value. This seems to introduce some lag or jitter.
-    // An other way is to compute the time increment and set the correct value.
-    // It seems that a lower value is also working (when the frame is received
-    // the timestamp is always "late" so the frame is displayed immediately).
-    // Here, we set the time increment to the lowest possible value
-    // (1 = 1/90000 s) which is probably stupid but is actually working.
-
     // Free the image
     v4l2_image_free(viewvideo.dev, &img);
   }
@@ -563,16 +552,10 @@ int get_pos_b(uint16_t x_pix, uint16_t y_pix, float *body_x, float *body_y)
 
 //get position in global frame based on single marker
 int get_pos_g(float x_body, float y_body, float *x_marker_g, float *y_marker_g)
-{/*
-  *x_marker_g = cosf(marker_heading_temp)*x_body - sinf(marker_heading_temp)*y_body;//try -marker_heading_temp
-   *y_marker_g = sinf(marker_heading_temp)*x_body + cosf(marker_heading_temp)*y_body;
-  */
+{
    *x_marker_g = cosf(marker_heading_reverse)*(-x_body) - sinf(marker_heading_reverse)*(-y_body);
    *y_marker_g = sinf(marker_heading_reverse)*(-x_body) + cosf(marker_heading_reverse)*(-y_body);
-   /*
-   *x_marker_g = cosf(marker_heading)*(-x_body) + sinf(marker_heading)*(-y_body);
-   *y_marker_g = -sinf(marker_heading)*(-x_body) + cosf(marker_heading)*(-y_body);
-   */
+   
 }
 
 /* calculate angle based on two points */

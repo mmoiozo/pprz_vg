@@ -201,7 +201,7 @@ inline int multi_blob_uyvy(struct image_t *input, struct image_t *output, uint8_
       }
       
       }
-      if(any_match > 0)
+      if(any_match > 0)//any_match > 0
       {
 	// UYVY
         dest[0] = 250;//64;        // U
