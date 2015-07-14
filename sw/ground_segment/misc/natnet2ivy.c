@@ -499,8 +499,8 @@ gboolean timeout_transmit_callback(gpointer data) {
     // Transmit the REMOTE_GPS packet on the ivy bus
     IvySendMsg("0 REMOTE_GPS %d %d %d %d %d %d %d %d %d %d %d %d %d %d", aircrafts[rigidBodies[i].id].ac_id,
       rigidBodies[i].nMarkers,                //uint8 Number of markers (sv_num)
-      (int)(ecef_pos.x*100.0),                //int32 ECEF X in CM //ecef_pos.x*100.0//rigidBodies[i].x*100
-      (int)(ecef_pos.y*100.0),                //int32 ECEF Y in CM//ecef_pos.y*100.0//rigidBodies[i].y*100
+      (int)(rigidBodies[i].x*1000.0),                //int32 ECEF X in CM //ecef_pos.x*100.0//rigidBodies[i].x*100
+      (int)(rigidBodies[i].y*1000.0),                //int32 ECEF Y in CM//ecef_pos.y*100.0//rigidBodies[i].y*100
       (int)(ecef_pos.z*100.0),                //int32 ECEF Z in CM
       (int)(DegOfRad(lla_pos.lat)*1e7),       //int32 LLA latitude in deg*1e7
       (int)(DegOfRad(lla_pos.lon)*1e7),       //int32 LLA longitude in deg*1e7

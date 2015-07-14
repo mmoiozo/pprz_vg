@@ -53,6 +53,7 @@ extern int32_t ecef_z_optitrack;
 extern int32_t alt_optitrack;
 extern int32_t lat_optitrack;
 extern int32_t lon_optitrack;
+extern int32_t heading_optitrack;
 
 // Module functions
 extern void visualposition_init(void);

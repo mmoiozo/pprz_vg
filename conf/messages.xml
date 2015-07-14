@@ -1906,7 +1906,29 @@
     <field name="msg" type="char[]"/>
   </message>
 
-  <!--216 is free -->
+  <message name="BLOB_DEBUG_2" id="216">
+    <field name="x_pos"  type="int32"/>
+    <field name="y_pos"  type="int32"/>
+    <field name="sonar_alt"      type="int32"/>
+    <field name="optitrack_x"    type="int32"/>
+    <field name="optitrack_y"    type="int32"/>
+    <field name="optitrack_z"    type="int32"/>
+    <field name="marker_detected"    type="int32"/>
+    <field name="phi"            type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="theta"          type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="psi"            type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="psi_map"    type="int32" alt_unit="deg" alt_unit_coef="0.0139882"/>
+    <field name="gp_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
+    <field name="gq_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
+    <field name="gr_rate"    type="int32" alt_unit="deg/s" alt_unit_coef="0.0139882"/>
+    <field name="blob_center_x_1"  type="int32"/>
+    <field name="blob_center_y_1"  type="int32"/>
+    <field name="blob_center_x_2"  type="int32"/>
+    <field name="blob_center_y_2"  type="int32"/>
+    <field name="speed_x"  type="int32"/>
+    <field name="speed_y"  type="int32"/>
+  </message>
+  
   <message name="BLOB_DEBUG" id="217">
     <field name="blob_center_x"  type="int32"/>
     <field name="blob_center_y"  type="int32"/>

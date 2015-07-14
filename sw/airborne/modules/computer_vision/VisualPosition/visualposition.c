@@ -177,8 +177,10 @@ struct viewvideo_t viewvideo = {
   
   uint32_t color_debug_u = 0;
   uint32_t color_debug_v = 0;
-  uint32_t blob_x_debug = 0;
-  uint32_t blob_y_debug = 0;
+  uint32_t blob_x_debug_1 = 0;
+  uint32_t blob_y_debug_1 = 0;
+  uint32_t blob_x_debug_2 = 0;
+  uint32_t blob_y_debug_2 = 0;
   
 // Vision module
 uint8_t color_lum_min = 60;
@@ -228,10 +230,12 @@ int32_t lon_optitrack = 0;
 int32_t ecef_x_optitrack = 0;
 int32_t ecef_y_optitrack = 0;
 int32_t ecef_z_optitrack = 0;
+int32_t heading_optitrack = 0;
 
 float x_pos_optitrack = 0;
 float y_pos_optitrack = 0;
 float z_pos_optitrack = 0;
+float heading_optitrack_f = 0;
 
 float x_pos = 0.0;
 float y_pos = 0.0;
@@ -239,14 +243,21 @@ struct FloatEulers* body_angle;
 
 //Speed calculations
 int samples = 0;
+float prev_pos_x = 0;
+float prev_pos_y = 0;
+float prev_pos_z = 0;
 float av_time = 0;
 float x_speed = 0;
 float y_speed = 0;
 float z_speed = 0;
+int32_t x_speed_debug = 0;
+int32_t y_speed_debug = 0;
+
 
 //timing
 long diffTime;
 int32_t dt = 0;
+int32_t test_count = 0;
 struct timeval start_time;
 struct timeval end_time;
 
@@ -293,8 +304,9 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 static void send_blob_debug(struct transport_tx *trans, struct link_device *dev) //static void send_blob_debug(void) 
  {
     pthread_mutex_lock(&visualposition_mutex);
- pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &ecef_x_optitrack, &ecef_y_optitrack, &ecef_z_optitrack, &markers_detected, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r);
-  pthread_mutex_unlock(&visualposition_mutex);
+ //pprz_msg_send_BLOB_DEBUG(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &ecef_x_optitrack, &ecef_y_optitrack, &ecef_z_optitrack, &markers_detected, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r);
+ pprz_msg_send_BLOB_DEBUG_2(trans, dev, AC_ID, &color_debug_u, &color_debug_v, &sonar_debug, &ecef_x_optitrack, &ecef_y_optitrack, &ecef_z_optitrack, &markers_detected, &phi_temp, &theta_temp, &psi_temp, &psi_map_temp, &imu.gyro.p, &imu.gyro.q, &imu.gyro.r, &blob_x_debug_1, &blob_y_debug_1, &blob_x_debug_2, &blob_y_debug_2, &x_speed_debug, &y_speed_debug); 
+ pthread_mutex_unlock(&visualposition_mutex);
  }
 
 
@@ -363,6 +375,7 @@ static void *visualposition_thread(void *data __attribute__((unused)))
      diffTime = end_timer();  //
     start_timer();
     dt = (int32_t)(diffTime)/USEC_PER_MS;// check the loop rate
+    test_count += dt;//test time increment
     
     // Wait for a new frame (blocking)
     struct image_t img;
@@ -474,10 +487,18 @@ static void *visualposition_thread(void *data __attribute__((unused)))
     av_time += dt;
     if(samples >= 2) {
       
-      speed.x = (pos.x*1000) / av_time;
-      speed.y = (pos.y*1000) / av_time;
-      speed.z = (pos.z*1000) / av_time;
+      speed.x = ((pos.x-prev_pos_x)*1000) / av_time;
+      speed.y = ((pos.y-prev_pos_y)*1000) / av_time;
+      speed.z = ((pos.z-prev_pos_z)*1000) / av_time;
+      
+      prev_pos_x = pos.x;
+      prev_pos_y = pos.y;
+      prev_pos_z = pos.z;
 
+      //for debug purposes
+      x_speed = speed.x * 10;// MM/S speed
+      y_speed = speed.y * 10;// MM/S speed
+      
       // Conver the speed to ecef based on the Optitrack LTP
       ecef_of_enu_vect_d(&ecef_vel ,&tracking_ltp ,&speed);
     samples = 0;
@@ -506,12 +527,17 @@ static void *visualposition_thread(void *data __attribute__((unused)))
      color_debug_u = (int32_t)x_pos;//debug value vision based x position 
      color_debug_v = (int32_t)y_pos;//debug value vision based y position
      sonar_debug = (int32_t)h;//sonar altitude 
-     blob_x_debug = (int32_t)(blob_x[0]-80);// x position in pixels of first detected blob
-     blob_y_debug = (int32_t)(blob_y[0]-120);// y position in pixels of first detected blob
+     blob_x_debug_1 = (int32_t)(blob_x[0]-80);// x position in pixels of first detected blob
+     blob_y_debug_1 = (int32_t)(blob_y[0]-120);// y position in pixels of first detected blob
+     blob_x_debug_2 = (int32_t)(blob_x[1]-80);// x position in pixels of second detected blob
+     blob_y_debug_2 = (int32_t)(blob_y[1]-120);// y position in pixels of second detected blob
      phi_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->phi);
      theta_temp = ANGLE_BFP_OF_REAL(stateGetNedToBodyEulers_f()->theta);//stateGetNedToBodyEulers_f()->theta);//heading_offset
-     psi_temp = ANGLE_BFP_OF_REAL(marker_heading_temp);//stateGetNedToBodyEulers_f()->psi);//marker_heading_temp);
-     psi_map_temp = ANGLE_BFP_OF_REAL((compensated_heading));//marker_heading);
+     psi_temp = ANGLE_BFP_OF_REAL(compensated_heading);//marker_heading_temp);
+     heading_optitrack_f = heading_optitrack / 10000000.0;
+     psi_map_temp = ANGLE_BFP_OF_REAL(heading_optitrack_f);//compensated_heading);
+     x_speed_debug = (int32_t)x_speed;
+     y_speed_debug = (int32_t)y_speed;
      
     // encode video feed
     if (viewvideo.downsize_factor != 1) {
@@ -663,7 +689,8 @@ void visualposition_init(void)
   }
 #endif
 //init debug
-    register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG", send_blob_debug);
+    //register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG", send_blob_debug);
+    register_periodic_telemetry(DefaultPeriodic, "BLOB_DEBUG_2", send_blob_debug);
 // Subscribe to the sonar_meas ABI messages
   AbiBindMsgAGL(ABI_BROADCAST, &ev, sonar_abi);
 }
