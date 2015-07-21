@@ -102,8 +102,8 @@
     <define name="MAG_Z_CURRENT_COEF" value="0.0"/>
 
     <define name="BODY_TO_IMU_PHI" value="0." unit="deg"/>
-    <define name="BODY_TO_IMU_THETA" value="0." unit="deg"/>
-    <define name="BODY_TO_IMU_PSI" value="0." unit="deg"/>
+    <define name="BODY_TO_IMU_THETA" value="8." unit="deg"/>
+    <define name="BODY_TO_IMU_PSI" value="2.3" unit="deg"/>
   </section>
 
   <!-- local magnetic field -->
@@ -209,7 +209,7 @@
 
   <section name="GUIDANCE_H" prefix="GUIDANCE_H_">
     <!-- Good weather -->
-    <define name="MAX_BANK" value="5" unit="deg"/><!--MAX_BANK was 20-->
+    <define name="MAX_BANK" value="5" unit="deg"/><!--MAX_BANK was 20 daarna 5-->
     <!-- Bad weather -->
     <!-- define name="MAX_BANK" value="32" unit="deg"/ -->
 

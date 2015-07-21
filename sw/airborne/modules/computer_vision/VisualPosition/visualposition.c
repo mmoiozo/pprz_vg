@@ -297,7 +297,7 @@ static void sonar_abi(uint8_t sender_id __attribute__((unused)), float distance)
 {
   // Update the distance if we got a valid measurement
   if (distance > 0) {
-    h = distance*100*0.7;//in cm 0.7 scale factor sonar of drone might be broken
+    h = distance*100*0.665;//in cm 0.7 scale factor sonar of drone might be broken
   }
 }
 
